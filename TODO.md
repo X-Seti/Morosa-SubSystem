@@ -16,3 +16,4 @@
 - A3000: no Kickstart 1.4 bootstrap ROM available; SuperKickstart boot not implemented.
 - CDTV: SimCity CD gameplay after title untested; check later screens.
 - CDTV: memory card contents are not saved to a file between runs.
+- Appicon needed - Links to App_Settings_System.py themes.
