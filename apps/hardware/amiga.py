@@ -120,6 +120,8 @@ class Amiga:
         self.ports = self.agnus.inp = Ports()
         self.keyboard = self.agnus.kbd = Keyboard(self.ciaa)
         self.gary = Gary()
+        if preset in MOBO_PRESETS:
+            self.bus.berr_on = lambda: bool(self.gary.timeout)
         self.ramsey = Ramsey(preset) if preset in ("A3000", "A4000", "A4000D", "A4000T") else None
         self.gayle = Gayle(0xD1 if preset in ("A1200", "CD32") else 0xD0) if preset in ("A600", "A1200", "CD32") else None
         self.dmac = DMAC(lambda on: on and self.paula.request(0x0008), lambda a, d: self._dma_write(a, d)) if preset == "CDTV" else None
@@ -128,6 +130,9 @@ class Amiga:
         self.nvram = bytearray(0x8000) if preset == "CDTV" else None
         if self.nvram is not None:
             self.bus.hook_range(0xDC8000, 0xDD0000, self._nv_read, self._nv_write)
+        self.card = bytearray(0x10000) if preset == "CDTV" else None
+        if self.card is not None:
+            self.bus.hook_range(0xE00000, 0xE80000, self._card_read, self._card_write)
         self.sdmac = SDMAC(lambda on: on and self.paula.request(0x0008), self._dma_read, self._dma_write) if preset == "A3000" else None
         if self.sdmac:
             self.bus.hook_range(SDMAC_BASE, SDMAC_BASE + 0x10000, self.sdmac.read, self.sdmac.write)
@@ -230,6 +235,16 @@ class Amiga:
     def _nv_write(self, a: int, size: int, v: int) -> None:  #vers 1
         o, n = a - 0xDC8000, (1, 2, 4)[size]
         self.nvram[o:o + n] = (v & (1 << 8 * n) - 1).to_bytes(n, "big")
+
+    def _card_read(self, a: int, size: int) -> int:  #vers 1
+        """CDTV memory card, 64K mirrored."""
+        o, n = a & 0xFFFF, (1, 2, 4)[size]
+        return int.from_bytes(bytes(self.card[(o + i) & 0xFFFF] for i in range(n)), "big")
+
+    def _card_write(self, a: int, size: int, v: int) -> None:  #vers 1
+        n = (1, 2, 4)[size]
+        for i, x in enumerate((v & (1 << 8 * n) - 1).to_bytes(n, "big")):
+            self.card[(a + i) & 0xFFFF] = x
 
     def _glue_read(self, a: int, size: int) -> int:  #vers 2
         o = a & 0xFFFF

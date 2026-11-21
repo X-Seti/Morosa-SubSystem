@@ -156,19 +156,21 @@ class Bus:
         self.sup = True
         self.open_bus = False
         self.open_ranges = []
+        self.open_value = 0
+        self.berr_on = None
 
     def hook_range(self, start: int, end: int, read=None, write=None) -> None:  #vers 1
         """read(addr, size) -> int and write(addr, size, value) cover [start, end)."""
         self.ranges.append((start, end, read, write))
 
-    def _hook(self, a, write):  #vers 2
+    def _hook(self, a, write):  #vers 3
         for s, e, r, w in self.ranges:
             if s <= a < e:
                 f = w if write else r
                 if f:
                     return f
-        if self.open_bus or any(s <= a < e for s, e in self.open_ranges):
-            return (lambda a, size, v=0: None) if write else (lambda a, size: 0)
+        if self.open_bus or any(s <= a < e for s, e in self.open_ranges) or (self.berr_on and not self.berr_on()):
+            return (lambda a, size, v=0: None) if write else (lambda a, size: self.open_value)
         raise BusError(f"bus error at {a:08x}")
 
     def r8(self, a):  #vers 2

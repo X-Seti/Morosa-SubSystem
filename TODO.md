@@ -15,3 +15,4 @@
 - A4000T KS 3.1 boots but the SCSI scan takes about 9000 frames; 53C710 SCRIPTS still unimplemented, so no SCSI disks.
 - A3000: no Kickstart 1.4 bootstrap ROM available; SuperKickstart boot not implemented.
 - CDTV: SimCity CD gameplay after title untested; check later screens.
+- CDTV: memory card contents are not saved to a file between runs.

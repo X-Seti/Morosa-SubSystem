@@ -21,3 +21,5 @@
 - Nov 19 2026 - Hardfile without RDB: geometry chosen so partition size is exact (root block position). Non-RDB HDF boots from A3000 SCSI. Xenon 2 CD32 reaches title.
 - Nov 19 2026 - AGA: 64-bit fetch (FMODE 3) display delayed 8 pixels; CD32/A1200 Workbench windows no longer clipped at left.
 - CDTV: 1MB chip uses wide blitter pointers; SimCity CD title draws correctly.
+- CDTV: 64K memory card at $E00000; SimCity save and load to RAM card work.
+- A3000/A4000: unmapped accesses no longer bus error until Gary timeout is enabled; KS 2.04, 3.1, 3.2 boot to insert-disk.
