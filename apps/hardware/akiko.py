@@ -1,4 +1,4 @@
-#this belongs in apps/hardware/akiko.py - Version: 2
+#this belongs in apps/hardware/akiko.py - Version: 3
 # X-Seti - November 17 2026 - Morosa - Morosa Akiko.
 
 """
@@ -15,6 +15,7 @@ Morosa Akiko - CD32 custom chip at 0xB80000: ID, chunky to planar converter, 24C
 # Akiko.read
 # Akiko.write
 
+from apps.core import video_ext
 from apps.hardware.akiko_cd import AkikoCD
 
 AKIKO_BASE = 0xB80000
@@ -24,7 +25,8 @@ NVRAM_SIZE = 1024
 class Akiko:
     """Byte-addressed registers (off = address - 0xB80000); the CD registers are handled by AkikoCD."""
 
-    def __init__(self, irq=None, mem_read=None, mem_write=None):  #vers 2
+    def __init__(self, irq=None, mem_read=None, mem_write=None):  #vers 3
+        self.c2p_on = True
         self.cd = AkikoCD(irq or (lambda on: None), mem_read or (lambda a: 0), mem_write or (lambda a, v: None))
         self.buf = [0] * 8
         self.res = [0] * 8
@@ -41,11 +43,8 @@ class Akiko:
         self.hsda = 1
         self.hostack = 1
 
-    def c2p(self) -> None:  #vers 1
-        self.res = [0] * 8
-        for i in range(256):
-            if self.buf[7 - (i >> 5)] >> (i & 31) & 1:
-                self.res[i & 7] |= 1 << (i >> 3)
+    def c2p(self) -> None:  #vers 2
+        self.res = list(video_ext.c2p(self.buf))
 
     # ---- 24C08 on SCL/SDA ----
     def _line(self) -> None:  #vers 1
@@ -117,11 +116,13 @@ class Akiko:
         self.phase, self.pos = "tx", 0
         self.sda_dev = self.nvram[self.addr] >> 7 & 1
 
-    def read(self, off: int) -> int:  #vers 2
+    def read(self, off: int) -> int:  #vers 3
         """Byte read."""
         if off < 4:
             return (0xC0, 0xCA, 0xCA, 0xFE)[off]
         if 0x38 <= off < 0x3C:
+            if not self.c2p_on:
+                return 0
             if self.ridx < 0:
                 self.c2p()
                 self.ridx = 0
@@ -138,8 +139,10 @@ class Akiko:
             return self.cd.read(off)
         return self.regs.get(off, 0)
 
-    def write(self, off: int, v: int) -> None:  #vers 2
+    def write(self, off: int, v: int) -> None:  #vers 3
         v &= 0xFF
+        if 0x38 <= off < 0x3C and not self.c2p_on:
+            return
         if 0x38 <= off < 0x3C:
             i = off - 0x38
             if i == 0:

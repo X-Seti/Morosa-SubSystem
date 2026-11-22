@@ -1,2 +1,7 @@
 __pycache__/
 *.pyc
+*.so
+apps/core/cpu.c
+build/
+apps/core/musashi/m68kops.*
+apps/core/musashi/m68kmake

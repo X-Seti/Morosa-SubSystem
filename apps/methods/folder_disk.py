@@ -1,4 +1,4 @@
-#this belongs in apps/methods/folder_disk.py - Version: 1
+#this belongs in apps/methods/folder_disk.py - Version: 4
 # X-Seti - November 17 2026 - Morosa - Folder To Hard Disk.
 
 """
@@ -6,11 +6,13 @@ Folder Disk - builds a bootable RDB + FFS hard disk image from a host folder; gu
 """
 
 ##Methods list -
+# boot_root
 # build_file
 # build_image
 # _alloc
 # _bitmap_blocks
 # _checksum
+# _has_startup
 # _hash
 # _name_bytes
 # _rdb_blocks
@@ -138,7 +140,7 @@ def _bitmap_blocks(alloc: _Alloc, bm_blocks: list) -> list:  #vers 1
     return out
 
 
-def _rdb_blocks(cyls: int, nblocks: int, label: str, dev: str, boot_pri: int) -> tuple:  #vers 1
+def _rdb_blocks(cyls: int, nblocks: int, label: str, dev: str, boot_pri: int) -> tuple:  #vers 2
     r = [0] * 128
     r[0], r[1], r[3], r[4], r[5] = 0x5244534B, 64, 7, BS, 0x12
     r[6] = r[8] = r[9] = 0xFFFFFFFF
@@ -153,7 +155,7 @@ def _rdb_blocks(cyls: int, nblocks: int, label: str, dev: str, boot_pri: int) ->
     w[2] = 0
     w[2] = -sum(w[:64]) & 0xFFFFFFFF
     p = [0] * 128
-    p[0], p[1], p[3], p[4], p[5] = 0x50415254, 64, 7, 0xFFFFFFFF, 1
+    p[0], p[1], p[3], p[4], p[5] = 0x50415254, 64, 7, 0xFFFFFFFF, 0 if boot_pri <= -128 else 1
     pb = bytearray(512)
     struct.pack_into(">128I", pb, 0, *p)
     d = _name_bytes(dev)
@@ -165,6 +167,32 @@ def _rdb_blocks(cyls: int, nblocks: int, label: str, dev: str, boot_pri: int) ->
     q[2] = 0
     q[2] = -sum(q[:64]) & 0xFFFFFFFF
     return struct.pack(">128I", *w), struct.pack(">128I", *q)
+
+
+def _has_startup(folder: str) -> bool:  #vers 1
+    try:
+        names = {n.lower(): n for n in os.listdir(folder)}
+        return "s" in names and "startup-sequence" in {n.lower() for n in os.listdir(os.path.join(folder, names["s"]))}
+    except OSError:
+        return False
+
+
+def boot_root(folder: str) -> str:  #vers 1
+    """Folder with S/Startup-sequence: folder itself, else a boot subfolder within two levels."""
+    if _has_startup(folder):
+        return folder
+    found = []
+    for a in sorted(os.listdir(folder)):
+        pa = os.path.join(folder, a)
+        if not os.path.isdir(pa):
+            continue
+        found.append(pa)
+        found += [os.path.join(pa, b) for b in sorted(os.listdir(pa)) if os.path.isdir(os.path.join(pa, b))]
+    found.sort(key=lambda x: "boot" not in x.lower())
+    for f in found:
+        if _has_startup(f):
+            return f
+    raise ValueError(f"no S/Startup-sequence found in {folder}")
 
 
 def build_file(folder: str, out, dev: str = "DH0", boot_pri: int = 0, label: str = "") -> int:  #vers 1
@@ -297,8 +325,9 @@ def build_file(folder: str, out, dev: str = "DH0", boot_pri: int = 0, label: str
     return cyls * CYL * BS
 
 
-def build_image(folder: str, dev: str = "DH0", boot_pri: int = 0):  #vers 1
+def build_image(folder: str, dev: str = "DH0", boot_pri: int = 0):  #vers 2
     """Memory-mapped bootable disk image of folder; changes made by the guest are not saved."""
     tmp = tempfile.TemporaryFile()
     size = build_file(folder, tmp, dev, boot_pri)
+    tmp.flush()
     return mmap.mmap(tmp.fileno(), size, access=mmap.ACCESS_COPY)

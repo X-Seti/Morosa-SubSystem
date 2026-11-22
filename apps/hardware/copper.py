@@ -1,4 +1,4 @@
-#this belongs in apps/hardware/copper.py - Version: 1
+#this belongs in apps/hardware/copper.py - Version: 2
 # X-Seti - November 17 2026 - Morosa - Morosa Copper.
 
 """
@@ -10,14 +10,18 @@ Morosa Copper - Agnus coprocessor: MOVE, WAIT and SKIP instructions run against 
 # Copper._cond
 # Copper.frame_start
 # Copper.jump
-# Copper.step
+# Copper.run_line
 # Copper.write
+
+from apps.core import video_ext
+
 
 class Copper:
     """read16(addr), write_reg(off, v) hit chip RAM and the custom registers; blitter_busy() for the BFD flag."""
 
     def __init__(self, read16, write_reg, blitter_busy=None, ecs: bool = False):  #vers 1
         self.read16, self.write_reg = read16, write_reg
+        self.chip, self.mask = bytearray(8), 0
         self.blitter_busy = blitter_busy or (lambda: False)
         self.ecs = ecs
         self.lc1 = self.lc2 = 0
@@ -65,32 +69,10 @@ class Copper:
         v, h = vpos & vm, hpos & hm
         return v > (vp & vm) or (v == (vp & vm) and h >= (hp & hm))
 
-    def step(self, vpos: int, hpos: int) -> None:  #vers 1
-        """Run one instruction slot at the given beam position (hpos in colour clocks)."""
-        if not self.dma or self.halted:
-            return
-        if self.waiting:
-            if not self._cond(vpos, hpos):
-                return
-            self.waiting = False
-        w1, w2 = self.read16(self.pc), self.read16(self.pc + 2)
-        self.pc += 4
-        if self.skip_next:
-            self.skip_next = False
-            return
-        if not w1 & 1:
-            reg = w1 & 0x1FE
-            floor = 0x40 if self.copcon & 2 else 0x80
-            if self.ecs and self.copcon & 2:
-                floor = 0x40
-            if reg < floor:
-                self.halted = True
-                return
-            self.write_reg(reg, w2)
-            return
-        self.wait = (w1 >> 8 & 0xFF, w1 & 0xFE, (w2 >> 8 & 0x7F) | 0x80, w2 & 0xFE, bool(w2 & 0x8000))
-        if w2 & 1:
-            if self._cond(vpos, hpos):
-                self.skip_next = True
-        else:
-            self.waiting = True
+    def run_line(self, vpos: int, ccl: int, wcb) -> None:  #vers 1
+        """Run one line of slots natively; wcb(reg, v, hpos) writes a register, returns dma flag."""
+        (self.pc, self.lc1, self.lc2, self.copcon, wt, ht, sk, *self.wait) = video_ext.copper_run(
+            self.chip, self.mask, self.pc, self.lc1, self.lc2, self.copcon, self.waiting, self.halted, self.skip_next,
+            *self.wait, vpos, ccl, wcb, self.blitter_busy)
+        self.waiting, self.halted, self.skip_next = bool(wt), bool(ht), bool(sk)
+        self.wait = tuple(self.wait[:4]) + (bool(self.wait[4]),)

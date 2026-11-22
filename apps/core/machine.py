@@ -1,4 +1,4 @@
-#this belongs in apps/core/machine.py - Version: 1
+#this belongs in apps/core/machine.py - Version: 2
 # X-Seti - November 17 2026 - Morosa - Morosa Machine.
 
 """
@@ -30,7 +30,8 @@ import os
 import queue
 
 from apps.core import hunk as morosa_hunk
-from apps.core.cpu import CPU, Bus
+from apps.core.cpu import CPU
+from apps.methods.bus import Bus
 from apps.core.devices import Timer
 from apps.core.doslib import Dos
 from apps.core.exec import Exec, Unimplemented

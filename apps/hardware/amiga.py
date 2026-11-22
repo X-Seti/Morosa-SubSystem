@@ -1,4 +1,4 @@
-#this belongs in apps/hardware/amiga.py - Version: 16
+#this belongs in apps/hardware/amiga.py - Version: 30
 # X-Seti - November 17 2026 - Morosa - Morosa Amiga Hardware.
 
 """
@@ -8,12 +8,17 @@ Morosa Amiga hardware - CPU, memory map and the custom chips wired together as a
 ##Methods list -
 # PRESETS
 # Amiga
+# Amiga.activity
 # Amiga._custom_read
 # Amiga._custom_write
 # Amiga._cia_read
 # Amiga._cia_write
 # Amiga._fast_read
 # Amiga._fast_write
+# Amiga._proc_read
+# Amiga._proc_write
+# Amiga._slow_read
+# Amiga._slow_write
 # Amiga._glue_read
 # Amiga._nv_read
 # Amiga._nv_write
@@ -34,10 +39,12 @@ Morosa Amiga hardware - CPU, memory map and the custom chips wired together as a
 # Amiga._ciab_out
 # Amiga._rtc_read
 # Amiga._rtc_write
+# Amiga.flush_disks
 # Amiga.insert_disk
 # Amiga._rom_read
 # Amiga._rom_write
 # Amiga.load_bootstrap
+# Amiga.display_box
 # Amiga.framebuffer
 # Amiga.boot
 # Amiga.load_rom
@@ -50,8 +57,9 @@ from apps.hardware.blitter import Blitter
 from apps.hardware.cia import CIA
 from apps.hardware.cdtv import DMAC, DMACBoard
 from apps.hardware.copper import Copper
-from apps.core.cpu import CPU, Bus
-from apps.hardware.denise import FB_LINES, FB_WIDTH, Denise
+from apps.methods.bus import Bus
+from apps.core.m68k import M68K
+from apps.hardware.denise import FB_LINES, FB_WIDTH, LEFT_ABS, Denise
 from apps.hardware.disk import DiskDMA
 from apps.hardware.floppy import Floppy
 from apps.hardware.gary import Gary, Gayle, Ramsey
@@ -82,6 +90,8 @@ PRESETS = {
 }
 CPI = 10            # CPU clocks per instruction used to share a line between CPU and chips
 FAST_BASE = 0x200000
+SLOW_BASE = 0xC00000
+PROC_BASE = 0x08000000
 MOBO_BASE = 0x07000000    # A3000 and A4000 motherboard RAM (Ramsey)
 MOBO_PRESETS = ("A3000", "A4000", "A4000D", "A4000T")
 ROM_BASE = 0xF80000
@@ -90,27 +100,40 @@ ROM_BASE = 0xF80000
 class Amiga:
     """One hardware Amiga. Chipsets that are not written yet refuse to start."""
 
-    def __init__(self, preset: str = "A500", fast_kb: int = 0, pal: bool = True, cpu: int = None):  #vers 5
-        model, chipset, chip_kb, _ = PRESETS[preset]
+    def __init__(self, preset: str = "A500", fast_kb: int = 0, pal: bool = True, cpu: int = None, addr24: bool = False, mhz: float = 0, chipset: str = "", chip_kb: int = 0, snd: tuple = (4, 8, 44100), slow_kb: int = 0, ports: tuple = ("mouse", "joy"), proc_kb: int = 0, fpu: int = 2, clx: int = 3):  #vers 16
+        model, base_chipset, preset_chip, _ = PRESETS[preset]
+        chip_kb = chip_kb if chip_kb in (256, 512, 1024, 2048) else preset_chip
+        chipset = chipset if chipset in ("ocs", "ecs") and base_chipset != "aga" else base_chipset
         model = cpu or model
         self.preset, self.chipset = preset, chipset
         self._de03 = 0xFF
         self.bus = Bus(chip_kb * 1024)
-        self.bus.amask = 0xFFFFFF if model < 68020 else 0xFFFFFFFF
+        self.bus.amask = 0xFFFFFF if model < 68020 or addr24 else 0xFFFFFFFF
         self.bus.open_bus = preset not in ("A3000", "A4000", "A4000D", "A4000T")
         self.bus.open_ranges = [(0x200000, 0xA00000), (0xC00000, 0xD80000), (0xF00000, 0xF80000), (0x1000000, 0x10000000), (0xDD0000, 0xDE0000)]
         self.bus.open_value = 0xFFFFFFFF if chipset != "aga" and preset not in MOBO_PRESETS else 0
-        self.cpu = CPU(self.bus, model)
+        self.cpu = M68K(self.bus, model)
+        self.cpu.core.set_fpu(fpu)
+        if addr24 and model >= 68020:
+            self.cpu.core.set_amask(0xFFFFFF)
+        self.ratio = max(1, round(mhz / 7.09)) if mhz else 1 if model < 68020 else 2 if model == 68020 else 3
+        self.cpu.sync(lambda done: setattr(self.agnus, "hpos", min(done // self.ratio // 2, 226)))
         self.fast = SparseRAM(fast_kb * 1024)
+        slow_kb = min(slow_kb, 1792)
+        self.slow = SparseRAM(slow_kb * 1024)
+        self.proc = SparseRAM(proc_kb * 1024)
+        self.act_hd = self.act_ram = 0
+        self._act_last = (0, 0, 0)
         self.fast_base = MOBO_BASE if preset in MOBO_PRESETS else FAST_BASE
         self.rom = b""
         self.wcs, self.wcs_lock = None, False
-        self.paula = Paula(irq=self._irq)
+        self.paula = Paula(irq=self._irq, nch=snd[0], bits=snd[1], rate=snd[2])
         self.ciaa = CIA(irq=lambda lv: lv and self.paula.request(0x0008), port_in=self._ciaa_in)
         self.drives = [Floppy() for _ in range(4)]
         self.ciab = CIA(irq=lambda lv: lv and self.paula.request(0x2000), port_out=self._ciab_out)
         ecs = chipset == "ecs"
         self.denise = Lisa() if chipset == "aga" else Denise(ecs)
+        self.denise.clx_mask = (0, 0x7E00, 0x7FFE, 0x7FFF)[clx]
         self.blitter = Blitter(None, None, ecs=chipset != "ocs" or chip_kb > 512)
         self.copper = Copper(None, None, ecs=chipset != "ocs")
         self.agnus = Agnus(self.bus.ram, self.paula, self.denise, self.blitter, self.copper, self.ciaa, self.ciab, pal, chipset)
@@ -118,6 +141,7 @@ class Amiga:
                                   lambda: self.agnus.dmacon, lambda: self.paula.adkcon, self.ciaa.flag)
         self.paula.dma_read = self.agnus.read16
         self.ports = self.agnus.inp = Ports()
+        self.ports.devs = list(ports)
         self.keyboard = self.agnus.kbd = Keyboard(self.ciaa)
         self.gary = Gary()
         if preset in MOBO_PRESETS:
@@ -175,6 +199,13 @@ class Amiga:
         b.hook_range(0xBFD000, 0xBFF000, self._cia_read, self._cia_write)
         if fast_kb:
             b.hook_range(self.fast_base, self.fast_base + fast_kb * 1024, self._fast_read, self._fast_write)
+            self.cpu.add_ram(self.fast_base, self.fast.buf)
+        if proc_kb:
+            b.hook_range(PROC_BASE, PROC_BASE + proc_kb * 1024, self._proc_read, self._proc_write)
+            self.cpu.add_ram(PROC_BASE, self.proc.buf)
+        if slow_kb:
+            b.hook_range(SLOW_BASE, SLOW_BASE + slow_kb * 1024, self._slow_read, self._slow_write)
+            self.cpu.add_ram(SLOW_BASE, self.slow.buf)
         b.hook_range(ROM_BASE, 0x1000000, self._rom_read, self._rom_write)
 
     # ---- wiring ----
@@ -200,10 +231,18 @@ class Amiga:
                 return d
         return None
 
-    def insert_disk(self, data: bytes, unit: int = 0, protected: bool = True) -> None:  #vers 1
+    def insert_disk(self, data: bytes, unit: int = 0, protected: bool = True, path: str = "") -> None:  #vers 2
         self.drives[unit].insert(data, protected)
+        self.drives[unit].path, self.drives[unit].saved, self.drives[unit].writes = path, 0, 0
 
-    def _custom_read(self, a: int, size: int) -> int:  #vers 1
+    def flush_disks(self) -> list:  #vers 1
+        """Write changed unprotected disks back to their ADF files; returns the units saved."""
+        return [i for i, d in enumerate(self.drives) if d.flush()]
+
+    def _custom_read(self, a: int, size: int) -> int:  #vers 2
+        if 0x400 <= (a & 0xFFF) < 0x500 and self.paula.nch > 4:
+            w = self.paula.xread(a & 0xFFE)
+            return (w & 0xFF if a & 1 else w >> 8) if size == 0 else w if size == 1 else w << 16 | self.paula.xread((a + 2) & 0xFFE)
         w = self.agnus.read(a & 0x1FE)
         if size == 0:
             return w & 0xFF if a & 1 else w >> 8
@@ -211,7 +250,14 @@ class Amiga:
             return w
         return w << 16 | self.agnus.read((a + 2) & 0x1FE)
 
-    def _custom_write(self, a: int, size: int, v: int) -> None:  #vers 1
+    def _custom_write(self, a: int, size: int, v: int) -> None:  #vers 2
+        if 0x400 <= (a & 0xFFF) < 0x500 and self.paula.nch > 4:
+            if size == 2:
+                self.paula.xwrite(a & 0xFFE, v >> 16)
+                self.paula.xwrite((a + 2) & 0xFFE, v & 0xFFFF)
+            else:
+                self.paula.xwrite(a & 0xFFE, (v & 0xFF) * 0x101 if size == 0 else v)
+            return
         if size == 0:
             v = (v & 0xFF) * 0x101
         if size == 2:
@@ -282,17 +328,31 @@ class Amiga:
     def _rtc_write(self, a: int, size: int, v: int) -> None:  #vers 1
         self.rtc.write(a & 0xFFFF, v & 0xFF)
 
+    def activity(self) -> dict:  #vers 2
+        """Which parts were busy since the last call."""
+        from apps.hardware.cdimage import CDImage
+        now = (self.act_hd, self.act_ram + self.cpu.touches, CDImage.reads)
+        last, self._act_last = self._act_last, now
+        return {"FD": any(d.motor for d in self.drives), "HD": now[0] != last[0], "CD": now[2] != last[2],
+                "RAM": now[1] != last[1], "CPU": not self.cpu.stopped}
+
     def add_board(self, board) -> None:  #vers 1
         (self.z2 if board.zorro == 2 else self.z3).add(board)
 
-    def _map_board(self, board, base: int, size: int) -> None:  #vers 1
+    def _map_board(self, board, base: int, size: int) -> None:  #vers 3
+        if hasattr(board, "map"):
+            board.map(self.bus, self.cpu, base, size)
+            return
         self.bus.hook_range(base, base + size, board.read, board.write)
+        self.cpu.add_ram(base, board.ram.buf)
 
-    def _dma_read(self, a: int, n: int) -> bytes:  #vers 1
+    def _dma_read(self, a: int, n: int) -> bytes:  #vers 2
+        self.act_hd += 1
         b = self.bus
         return bytes(b.ram[a:a + n]) if a + n <= b.size else bytes(b.r8(a + i) for i in range(n))
 
-    def _dma_write(self, a: int, data: bytes) -> None:  #vers 1
+    def _dma_write(self, a: int, data: bytes) -> None:  #vers 2
+        self.act_hd += 1
         b = self.bus
         if a + len(data) <= b.size:
             b.ram[a:a + len(data)] = data
@@ -328,7 +388,7 @@ class Amiga:
             self.ide_irqreg = 0x80
             self.paula.request(0x0008)
 
-    def _ide_read(self, a: int, size: int) -> int:  #vers 1
+    def _ide_read(self, a: int, size: int) -> int:  #vers 3
         off = a & 0xFFFF
         g = self.gayle
         if g and off >= 0x8000:
@@ -345,10 +405,11 @@ class Amiga:
             return v << 8 if size else v
         reg = (off & ~0x2020) >> 2
         if reg == 0:
+            self.act_hd += 1
             return self.ide.read(0, 2 if size == 2 else 1)
         return self.ide.read(reg & 0x7 if reg != 0x406 else reg)
 
-    def _ide_write(self, a: int, size: int, v: int) -> None:  #vers 1
+    def _ide_write(self, a: int, size: int, v: int) -> None:  #vers 3
         off = a & 0xFFFF
         g = self.gayle
         if g and off >= 0x8000:
@@ -360,16 +421,38 @@ class Amiga:
             return
         reg = (off & ~0x2020) >> 2
         if reg == 0:
+            self.act_hd += 1
             self.ide.write(0, v, 2 if size == 2 else 1)
         else:
+            self.act_hd += reg == 7
             self.ide.write(reg & 0x7 if reg != 0x406 else reg, v)
 
-    def _fast_read(self, a: int, size: int) -> int:  #vers 1
+    def _fast_read(self, a: int, size: int) -> int:  #vers 2
+        self.act_ram += 1
         return self.fast.read(a - self.fast_base, (1, 2, 4)[size])
 
-    def _fast_write(self, a: int, size: int, v: int) -> None:  #vers 1
+    def _fast_write(self, a: int, size: int, v: int) -> None:  #vers 2
+        self.act_ram += 1
         n = (1, 2, 4)[size]
         self.fast.write(a - self.fast_base, n, v & (1 << 8 * n) - 1)
+
+    def _proc_read(self, a: int, size: int) -> int:  #vers 1
+        self.act_ram += 1
+        return self.proc.read(a - PROC_BASE, (1, 2, 4)[size])
+
+    def _proc_write(self, a: int, size: int, v: int) -> None:  #vers 1
+        self.act_ram += 1
+        n = (1, 2, 4)[size]
+        self.proc.write(a - PROC_BASE, n, v & (1 << 8 * n) - 1)
+
+    def _slow_read(self, a: int, size: int) -> int:  #vers 1
+        self.act_ram += 1
+        return self.slow.read(a - SLOW_BASE, (1, 2, 4)[size])
+
+    def _slow_write(self, a: int, size: int, v: int) -> None:  #vers 1
+        self.act_ram += 1
+        n = (1, 2, 4)[size]
+        self.slow.write(a - SLOW_BASE, n, v & (1 << 8 * n) - 1)
 
     def _rom_read(self, a: int, size: int) -> int:  #vers 2
         o, n = a - ROM_BASE, (1, 2, 4)[size]
@@ -411,28 +494,36 @@ class Amiga:
         o, n = a - self.ext_base, (1, 2, 4)[size]
         return int.from_bytes(self.ext[o:o + n], "big") if o + n <= len(self.ext) else 0
 
-    def boot(self) -> None:  #vers 1
+    def boot(self) -> None:  #vers 3
         """Hardware reset: stack and start address come from the first two longs of the ROM."""
         sp, pc = int.from_bytes(self.rom[0:4], "big"), int.from_bytes(self.rom[4:8], "big")
+        if self.wcs is None:
+            self.cpu.set_rom(self.rom, ROM_BASE)
         self.reset(pc, sp)
 
     def reset(self, pc: int, sp: int) -> None:  #vers 1
         self.cpu.reset(pc, sp)
         self.paula.intena = self.paula.intreq = 0
 
-    def run_frame(self) -> None:  #vers 2
-        cpu = self.cpu
+    def run_frame(self) -> None:  #vers 3
+        self.agnus.run_frame(lambda cycles: self.cpu.execute(cycles * self.ratio))
 
-        def cpu_run(cycles: int) -> None:
-            agnus = self.agnus
-            for i in range(cycles // CPI):
-                agnus.hpos = i * CPI // 2
-                if cpu.stopped and not cpu.irq_level:
-                    break
-                cpu.step()
+    def display_box(self):  #vers 1
+        """(x, y, w, h) of the active display window in framebuffer pixels."""
+        a = self.agnus
+        hs, he = a.diwstrt & 0xFF, (a.diwstop & 0xFF) | 0x100
+        vs, ve = a.diwstrt >> 8, (a.diwstop >> 8) | (0 if a.diwstop >> 8 & 0x80 else 0x100)
+        x0, x1 = max(0, (hs - LEFT_ABS) * 2), min(FB_WIDTH, (he - LEFT_ABS) * 2)
+        y0, y1 = max(0, vs * 2), min(FB_LINES, ve * 2)
+        if x1 - x0 < 64 or y1 - y0 < 64:
+            return 0, 0, FB_WIDTH, FB_LINES
+        return x0, y0, x1 - x0, y1 - y0
 
-        self.agnus.run_frame(cpu_run)
-
-    def framebuffer(self):  #vers 1
-        """(width, height, BGRA bytes) of the whole raster."""
+    def framebuffer(self):  #vers 2
+        """(width, height, BGRA bytes) of the whole raster, or the RTG board's screen when it has a mode set."""
+        for z in (self.z2, self.z3):
+            for b in z.boards:
+                f = b.frame() if hasattr(b, "frame") else None
+                if f:
+                    return f
         return FB_WIDTH, FB_LINES, bytes(self.denise.fb)

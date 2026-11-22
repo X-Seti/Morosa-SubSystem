@@ -1,4 +1,4 @@
-#this belongs in apps/hardware/disk.py - Version: 1
+#this belongs in apps/hardware/disk.py - Version: 3
 # X-Seti - November 17 2026 - Morosa - Morosa Paula Disk DMA.
 
 """
@@ -32,6 +32,7 @@ class DiskDMA:
         self.wr = False
         self.waiting = False
         self.pos = 0
+        self.shift = 0
         self.last = 0
         self.out = []
 
@@ -68,15 +69,20 @@ class DiskDMA:
             return False
         return True
 
-    def line(self) -> None:  #vers 1
+    def line(self) -> None:  #vers 3
         fl = self.drive()
         if fl is None:
             return
         words = fl.track_words()
         if not words:
             return
+        if self.pos >= len(words):
+            self.pos = 0
+        n = len(words)
         for _ in range(WORDS_PER_LINE):
-            w = words[self.pos]
+            raw = words[self.pos]
+            nxt = words[(self.pos + 1) % n]
+            w = ((raw << 16 | nxt) >> (16 - self.shift)) & 0xFFFF if self.shift else raw
             self.pos += 1
             if self.pos >= len(words):
                 self.pos = 0
@@ -98,9 +104,13 @@ class DiskDMA:
                     break
             else:
                 if self.waiting:
-                    if w == self.sync:
-                        self.waiting = False
-                        self.request(INT_DSKSYN)
+                    v = raw << 16 | nxt
+                    for s in range(16):
+                        if (v >> (16 - s)) & 0xFFFF == self.sync:
+                            self.shift = s
+                            self.waiting = False
+                            self.request(INT_DSKSYN)
+                            break
                     continue
                 self.chip_write(self.pt, w)
                 self.pt += 2

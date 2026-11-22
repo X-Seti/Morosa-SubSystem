@@ -73,15 +73,22 @@ class AutoConfig:
             return self._byte(b, off & 0xFFFF) << 8 | self._byte(b, off + 1 & 0xFFFF)
         return self.read(off, 1) << 16 | self.read(off + 2, 1)
 
-    def _byte(self, b, off: int) -> int:  #vers 1
+    def _byte(self, b, off: int) -> int:  #vers 2
         if b is None:
             return 0xFF
-        if off >= 0x40 or off & 1:
-            return 0
-        n = off >> 2
         rom = b.config_rom()
-        v = rom[n] if n < len(rom) else 0
-        nib = v >> 4 if not off & 2 else v & 15
+        if self.zorro == 3:
+            if off & 3 or off & 0xFF >= 0x40:
+                return 0
+            n = (off & 0xFF) >> 2
+            v = rom[n] if n < len(rom) else 0
+            nib = v & 15 if off & 0x100 else v >> 4
+        else:
+            if off >= 0x40 or off & 1:
+                return 0
+            n = off >> 2
+            v = rom[n] if n < len(rom) else 0
+            nib = v >> 4 if not off & 2 else v & 15
         if n != 0:
             nib ^= 15
         return nib << 4

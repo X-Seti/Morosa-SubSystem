@@ -1,4 +1,4 @@
-#this belongs in apps/hardware/agnus.py - Version: 6
+#this belongs in apps/hardware/agnus.py - Version: 13
 # X-Seti - November 17 2026 - Morosa - Morosa Agnus.
 
 """
@@ -7,6 +7,7 @@ Morosa Agnus - beam counter, DMA control, bitplane and sprite fetch; drives Copp
 
 ##Methods list -
 # Agnus
+# Agnus._cop_write
 # Agnus._fetch_planes
 # Agnus._sprites
 # Agnus.line
@@ -14,6 +15,10 @@ Morosa Agnus - beam counter, DMA control, bitplane and sprite fetch; drives Copp
 # Agnus.run_frame
 # Agnus.write
 # Agnus.write_reg
+
+import os
+
+import numpy as np
 
 DMAEN, BPLEN, COPEN, BLTEN, SPREN = 0x200, 0x100, 0x80, 0x40, 0x20
 CCLOCKS = 227
@@ -26,10 +31,13 @@ class Agnus:
 
     def __init__(self, chip: bytearray, paula, denise, blitter, copper, ciaa=None, ciab=None, pal: bool = True, model: str = "ocs"):  #vers 2
         self.chip, self.paula, self.denise, self.blitter, self.copper = chip, paula, denise, blitter, copper
+        denise.agnus = self
         self.ciaa, self.ciab = ciaa, ciab
         self.pal, self.model = pal, model
         self.hsync = None
         self.lines = 312 if pal else 262
+        self.beamcon, self.vtotal, self.htotal = (0x20 if pal else 0), 0, 0
+        self.ccl = CCLOCKS
         self.mask = len(chip) - 1
         self.dmacon = 0
         self.vpos = self.hpos = 0
@@ -48,6 +56,9 @@ class Agnus:
         blitter.read16, blitter.write16 = self.read16, self.write16
         copper.read16, copper.write_reg = self.read16, self.write_reg
         copper.blitter_busy = lambda: blitter.busy
+        copper.chip, copper.mask = chip, self.mask
+        blitter.chip, blitter.mask = chip, self.mask
+        paula.chip, paula.mask = chip, self.mask
         blitter.done = lambda: paula.request(INT_BLIT)
 
     # ---- chip RAM ----
@@ -74,10 +85,22 @@ class Agnus:
                 return v
         return 0
 
+    def _cop_write(self, off: int, v: int, h: int) -> bool:  #vers 1
+        self.hpos = h
+        self.write_reg(off, v)
+        return self.copper.dma
+
     def write(self, off: int, v: int) -> None:  #vers 1
         self.write_reg(off & 0x1FE, v & 0xFFFF)
 
-    def write_reg(self, off: int, v: int) -> None:  #vers 1
+    REGLOG = {0x100: "BPLCON0", 0x08E: "DIWSTRT", 0x090: "DIWSTOP", 0x092: "DDFSTRT", 0x094: "DDFSTOP", 0x108: "BPL1MOD", 0x10A: "BPL2MOD",
+              0x1FC: "FMODE", 0x1DC: "BEAMCON0", 0x1C0: "HTOTAL", 0x1C8: "VTOTAL", 0x1E4: "DIWHIGH", 0x106: "BPLCON3"}
+
+    def write_reg(self, off: int, v: int) -> None:  #vers 2
+        if off in self.REGLOG and os.environ.get("MOROSA_REGLOG") and self.__dict__.setdefault("_rl", {}).get(off) != v:
+            self._rl[off] = v
+            with open("morosa_reglog.txt", "a") as f:
+                f.write(f"{self.frames} {self.vpos} {self.REGLOG[off]} {v:04X}\n")
         if off == 0x096:
             self.dmacon = (self.dmacon | v & 0x7FFF) if v & 0x8000 else self.dmacon & ~v
             self.paula.sync_dma()
@@ -97,6 +120,8 @@ class Agnus:
             self.bpl1mod = v - 0x10000 if v & 0x8000 else v
         elif off == 0x10A:
             self.bpl2mod = v - 0x10000 if v & 0x8000 else v
+        elif off in (0x1C0, 0x1C8, 0x1DC) and self.model != "ocs":
+            self._beam(off, v)
         elif off == 0x1FC:
             self.denise.write(off, v)
         elif 0x0E0 <= off < 0x100:
@@ -113,21 +138,27 @@ class Agnus:
             pass
 
     # ---- frame ----
-    def _fetch_planes(self) -> list:  #vers 2
+    def _fetch_planes(self) -> list:  #vers 4
         bpu = self.denise.nplanes()
         mult = self.denise.fetch_mult()
-        hires = bool(self.denise.bplcon0 & 0x8000)
+        hires = bool(self.denise.bplcon0 & 0x8040)
         if not (self.dmacon & DMAEN and self.dmacon & BPLEN) or not bpu:
             return []
         n = ((self.ddfstop - self.ddfstrt) // (4 * mult if hires else 8 * mult) + (2 if hires and mult == 1 else 1)) * mult
+        if self.denise.bplcon0 & 0x40:
+            n = ((self.ddfstop - self.ddfstrt) // (2 * mult) + (4 if mult == 1 else 1)) * mult
         planes = []
         for i in range(bpu):
             ptr = self.bplpt[i]
-            planes.append([self.read16(ptr + 2 * w) for w in range(n)])
+            a = ptr & self.mask & ~1
+            if a + 2 * n <= len(self.chip):
+                planes.append(np.frombuffer(self.chip, dtype=">u2", count=n, offset=a))
+            else:
+                planes.append([self.read16(ptr + 2 * w) for w in range(n)])
             self.bplpt[i] = ptr + 2 * n + (self.bpl1mod if i % 2 == 0 else self.bpl2mod)
         return planes
 
-    def _sprites(self, vpos: int) -> None:  #vers 1
+    def _sprites(self, vpos: int) -> None:  #vers 2
         if not (self.dmacon & DMAEN and self.dmacon & SPREN):
             for s in self.denise.spr:
                 s["armed"] = False
@@ -136,6 +167,7 @@ class Agnus:
             st, ds = self.sprstate[n], self.denise.spr[n]
             if vpos == 0:
                 st.update(active=False, ended=False)
+                ds["armed"] = False
                 pos, ctl = self.read16(self.sprpt[n]), self.read16(self.sprpt[n] + 2)
                 self.sprpt[n] += 4
                 st["vstart"], st["vstop"] = pos >> 8 | (ctl >> 2 & 1) << 8, ctl >> 8 | (ctl >> 1 & 1) << 8
@@ -161,7 +193,7 @@ class Agnus:
                 self.sprpt[n] += 4
                 ds["a"], ds["b"], ds["armed"] = a, b, True
 
-    def line(self, cpu_run=None) -> None:  #vers 4
+    def line(self, cpu_run=None) -> None:  #vers 8
         v = self.vpos
         if v == 0:
             self.paula.request(INT_VERTB)
@@ -170,28 +202,50 @@ class Agnus:
                 self.ciaa.tod_tick()
         if self.ciab:
             self.ciab.tod_tick()
-        self._sprites(v)
+        if v:
+            self._sprites(v)
         if self.disk:
             self.disk.line()
         if self.kbd:
             self.kbd.line()
-        for h in range(0, CCLOCKS, 2):
-            self.hpos = h
-            self.copper.step(v, h)
+        cop = self.copper
+        if cop.dma and not cop.halted and not (cop.waiting and not cop._cond(v, self.ccl - 2)):
+            self.denise.rec = True
+            cop.run_line(v, self.ccl, self._cop_write)
+            self.denise.rec = False
+        if v == 0:
+            self._sprites(0)
+        self.hpos = self.ccl - 2
         vs, ve = self.diwstrt >> 8, (self.diwstop >> 8) | (0 if self.diwstop >> 8 & 0x80 else 0x100)
         hs, he = self.diwstrt & 0xFF, (self.diwstop & 0xFF) | 0x100
         planes = self._fetch_planes() if vs <= v < ve else []
-        x_abs = 2 * self.ddfstrt + (9 if self.denise.bplcon0 & 0x8000 else 17) + (8 if self.denise.fetch_mult() == 4 else 0)
+        x_abs = 2 * self.ddfstrt + (9 if self.denise.bplcon0 & 0x8040 else 17) + (8 if self.denise.fetch_mult() == 4 else 0)
         self.denise.render_line(v, planes, x_abs, (hs, he), (vs, ve))
         if cpu_run:
-            cpu_run(CCLOCKS * 2)
-        self.paula.tick(CCLOCKS)
+            cpu_run(self.ccl * 2)
+        self.paula.tick(self.ccl)
+        self.blitter.tick(self.ccl)
         for cia in (self.ciaa, self.ciab):
             if cia:
-                cia.tick(CCLOCKS // 5)
+                cia.tick(self.ccl // 5)
         if self.hsync:
             self.hsync()
         self.vpos += 1
+
+    def _beam(self, off: int, v: int) -> None:  #vers 1
+        """BEAMCON0, HTOTAL, VTOTAL: PAL/NTSC switch and variable frame size."""
+        if off == 0x1C0:
+            self.htotal = v & 0xFF
+        elif off == 0x1C8:
+            self.vtotal = v & 0x7FF
+        else:
+            self.beamcon = v
+        if self.beamcon & 0x80:
+            self.lines = max(200, self.vtotal + 1)
+            self.ccl = max(40, self.htotal) if self.htotal else CCLOCKS
+        elif off == 0x1DC:
+            self.lines = 312 if self.beamcon & 0x20 else 262
+            self.ccl = CCLOCKS
 
     def run_frame(self, cpu_run=None) -> None:  #vers 2
         self.vpos = 0

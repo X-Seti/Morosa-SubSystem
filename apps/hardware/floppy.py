@@ -1,21 +1,26 @@
-#this belongs in apps/hardware/floppy.py - Version: 1
+#this belongs in apps/hardware/floppy.py - Version: 4
 # X-Seti - November 17 2026 - Morosa - Morosa Floppy Drive.
 
 """
-Morosa Floppy - Amiga 3.5 inch drive on ADF images: head stepping, status lines and MFM track encode and decode.
+Morosa Floppy - Amiga 3.5 inch drive on ADF and extended ADF images: head stepping, status lines and MFM track encode and decode.
 """
 
 ##Methods list -
 # Floppy
 # Floppy.control
 # Floppy.eject
+# Floppy.flush
 # Floppy.insert
 # Floppy.status
 # Floppy.track_words
 # Floppy.write_track
+# Floppy._load_ext
 # decode_track
 # encode_track
 
+import os
+
+EXT_ID = b"UAE--ADF"
 ADF_SIZE = 80 * 2 * 11 * 512
 SECTORS = 11
 TRACK_WORDS = 6400
@@ -130,19 +135,41 @@ class Floppy:
         self.changed = True
         self.protected = True
         self.writes = 0
+        self.saved = 0
+        self.path = ""
         self._cache = {}
         self._prev_step = 1
+        self.ext = None
 
-    def insert(self, data: bytes, protected: bool = True) -> None:  #vers 1
-        if len(data) != ADF_SIZE:
+    def _load_ext(self, data: bytes) -> None:  #vers 1
+        """Extended ADF: 160 sync and length entries; sync 0 is a plain 11 sector track, else sync word then raw MFM."""
+        self.ext, off = {}, 8 + 160 * 4
+        adf = bytearray(ADF_SIZE)
+        for t in range(160):
+            sync, ln = int.from_bytes(data[8 + 4 * t:10 + 4 * t], "big"), int.from_bytes(data[10 + 4 * t:12 + 4 * t], "big")
+            body = data[off:off + ln].ljust(ln, b"\0")
+            off += ln
+            if sync == 0:
+                adf[t * SECTORS * 512:(t + 1) * SECTORS * 512] = body[:SECTORS * 512].ljust(SECTORS * 512, b"\0")
+            else:
+                self.ext[t] = [0xAAAA, sync] + [int.from_bytes(body[i:i + 2], "big") for i in range(0, ln - 1, 2)]
+        self.image = adf
+
+    def insert(self, data: bytes, protected: bool = True) -> None:  #vers 2
+        self.ext = None
+        if data[:8] == EXT_ID:
+            self._load_ext(data)
+            protected = True
+        elif len(data) != ADF_SIZE:
             raise ValueError("not a 880K ADF image")
-        self.image = bytearray(data)
+        else:
+            self.image = bytearray(data)
         self.protected = protected
         self.changed = True
         self._cache = {}
 
-    def eject(self) -> None:  #vers 1
-        self.image = None
+    def eject(self) -> None:  #vers 2
+        self.image, self.ext = None, None
         self.changed = True
         self._cache = {}
 
@@ -179,12 +206,24 @@ class Floppy:
             v &= ~0x04
         return v
 
-    def track_words(self) -> list:  #vers 1
+    def flush(self) -> bool:  #vers 1
+        """Save written sectors back to the ADF file; True when a file was written."""
+        if not self.path or self.image is None or self.protected or self.ext or self.writes == self.saved:
+            return False
+        tmp = self.path + ".tmp"
+        with open(tmp, "wb") as fh:
+            fh.write(self.image)
+        os.replace(tmp, self.path)
+        self.saved = self.writes
+        return True
+
+    def track_words(self) -> list:  #vers 2
         if self.image is None or self.cyl > 79:
             return []
         key = (self.cyl, self.side)
         if key not in self._cache:
-            self._cache[key] = encode_track(self.image, self.cyl, self.side)
+            t = self.cyl * 2 + self.side
+            self._cache[key] = self.ext[t] if self.ext and t in self.ext else encode_track(self.image, self.cyl, self.side)
         return self._cache[key]
 
     def write_track(self, words: list) -> int:  #vers 1

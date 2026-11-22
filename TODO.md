@@ -1,5 +1,7 @@
 # Morosa TODO
 
+- Split the Motarolla CPU into M68000.py M68010.py, M68020.py so on as this links in with the Virtual Emulation project where you seen the Virtual components on a Virtual PCB
+- 
 - Kickstart 1.3 idles at STOP after chip setup; find missing interrupt or device.
 - NCR 53C710 datasheet for SCRIPTS engine; WD33C93 timing is unchecked.
 - Buster, Amber, Fat Gary timeouts, Gayle PCMCIA.
@@ -17,3 +19,5 @@
 - CDTV: SimCity CD gameplay after title untested; check later screens.
 - CDTV: memory card contents are not saved to a file between runs.
 - Appicon needed - Links to App_Settings_System.py themes.
+- Native core: no bus errors on unmapped access; 68060 runs as 68040; Gary timeout and MMU faults untested.
+- Extended ADF: no writes; Turrican II title shows thin raster glitches.

@@ -1,4 +1,4 @@
-#this belongs in apps/core/mmu.py - Version: 1
+#this belongs in apps/core/mmu.py - Version: 3
 # X-Seti - November 17 2026 - Morosa - Morosa 68030/68040/68060 MMU.
 
 """
@@ -19,7 +19,7 @@ Morosa MMU - logical to physical address translation for the 68030 PMMU and the 
 
 
 def _fault(la, write):  #vers 1
-    from apps.core.cpu import BusError
+    from apps.methods.bus import BusError
     return BusError(f"mmu fault at {la:08x}", la, write)
 
 
@@ -163,12 +163,14 @@ class MMU:
         mask = 0x1FFF if big else 0xFFF
         return ((d & ~mask) | (la & mask), wp, bool(nd & 0x10), False)
 
-    def walk030(self, la: int, write: bool, sup: bool, dry: bool = False):  #vers 1
+    def walk030(self, la: int, write: bool, sup: bool, dry: bool = False):  #vers 2
         t = self._tt(la, write, sup)
         if t is not None:
             return (None, True, False, True) if t else (la, False, True, True)
         cr = self.cpu.cr
         tc = cr.get("tc", 0)
+        if not tc & 0x80000000:
+            return la, False, False, True
         shift = tc >> 16 & 15
         widths = [tc >> 12 & 15, tc >> 8 & 15, tc >> 4 & 15, tc & 15]
         root = cr.get("srp", 0) if (tc >> 25 & 1) and sup else cr.get("crp", 0)

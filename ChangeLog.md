@@ -23,3 +23,77 @@
 - CDTV: 1MB chip uses wide blitter pointers; SimCity CD title draws correctly.
 - CDTV: 64K memory card at $E00000; SimCity save and load to RAM card work.
 - A3000/A4000: unmapped accesses no longer bus error until Gary timeout is enabled; KS 2.04, 3.1, 3.2 boot to insert-disk.
+- Nov 21 2026 - Pause and Stop buttons. Activity status FD|HD|CD|RAM|CPU bottom right, toggle in Machine tab.
+- Nov 21 2026 - FPS counter top left, shown with activity status.
+- Nov 21 2026 - Bus: direct ROM reads skip hook scan; about 1.5x faster. TODO: 50 FPS needs a faster CPU core.
+- Nov 21 2026 - build_cpu.py compiles cpu.py with Cython; about 1.3x faster. Run after every cpu.py edit.
+- Nov 21 2026 - Native 68k core: Musashi via apps/core/m68k.py; build_musashi.py. Numpy video lines, copper idle skip. About 7x faster; cpu.py kept as reference.
+- Nov 21 2026 - Bus, BusError, AddressError moved to apps/methods/bus.py. Cython build files moved to Ref/.
+- Nov 21 2026 - Fast RAM and Zorro RAM mapped straight into the native core; memory.py uses mmap. Fixes 1-2 FPS memory test.
+- Nov 21 2026 - Lisa._compose vectorised; bitplane fetch reads chip RAM as arrays. A4000 about 1.6x faster.
+- Nov 21 2026 - Arrow keys and Ctrl or Alt drive joystick port 2 as well as the keyboard.
+- Nov 21 2026 - Keys tab: assign joystick keys per profile; second fire button on POTGOR.
+- Nov 21 2026 - Extended ADF (UAE--ADF) disks load; disk sync found at bit level. Turrican II reaches title screen.
+- Nov 21 2026 - SysInfo Guru 8100 0005 was stale blitter line mask (now synced). Native core takes interrupts mid-line.
+- Nov 21 2026 - Denise/Lisa line renderer moved to C (apps/core/video.c). Pixel-identical to numpy version; Turrican menu 18 to 80 fps in test.
+- Nov 21 2026 - Settings: path rows use SVG icon buttons for file, folder and clear.
+- Nov 21 2026 - Copper colour changes now apply mid-line (KS 3.1 tick gradient). Folder disk RDB flushed before mapping; HD Make bootable option uses boot folder.
+- Nov 21 2026 - Status bar: active items get a pulsing red underline. HD lit only on data or command access, not status polling.
+- Nov 21 2026 - Hardfiles without RDB: heads and sectors adjusted to whole cylinders so root block matches (fixes not a DOS disk).
+- Nov 21 2026 - Mouse capture: click grabs the pointer, Left Control + Alt releases. Launcher uses XWayland so pointer warping works.
+- Nov 21 2026 - Hard drive rows: Scan disk info button reports RDB, partitions, filesystem, geometry and root block problems.
+- Nov 21 2026 - Sprite list start read after copper line 0, so the Workbench pointer shows (copper loads SPRxPT then).
+- Nov 21 2026 - Copper line run and Akiko chunky-to-planar moved to C (video_ext). Output identical to Python.
+- Nov 21 2026 - Framebuffer now 626 rows: interlaced fields weave, non-interlaced lines doubled. Fixes interlace flicker.
+- Nov 22 2026 - Auto trim to workspace option: crops to the display window in all modes. Settings checkbox, off by default.
+- Nov 22 2026 - Blitter descending masks follow word order (fixes edge bits left after moves). Framebuffer 768 wide for full overscan.
+- Nov 22 2026 - Fixed mouse capture crash after trim change.
+- Nov 22 2026 - Renderer vertical clip uses raster line, not framebuffer row. Fixes half-height display.
+- Nov 22 2026 - Framebuffer 832 wide from hpos 0x40 so overscan screens reach all edges.
+- Nov 22 2026 - Sprites disarmed at frame start. Fixes stray vertical line when pointer is at the bottom edge.
+- Nov 22 2026 - AGA playfield scroll uses all BPLCON1 bits. Fixes Overscan editor box placement and handle dragging.
+- Nov 22 2026 - Browse dialogs remember last folder for ROM, ADF and HDF. Saved in morosa.json.
+- Nov 22 2026 - Snapshot: Print Screen saves snaps/snapNN.png, Amiga picture only.
+- Nov 22 2026 - F11 shows or hides the green HUD. F12 returns to Morosa Settings.
+- Nov 22 2026 - Config toolbar: clone, add, delete, import, export. Export writes to configs/ folder.
+- Nov 22 2026 - Hard drives: Boot Pri per drive replaces Make bootable. 0 and up boots, -128 does not. Old profiles convert.
+- Nov 22 2026 - Settings window: custom title bar. AmiSys button picks folder; cog opens App Settings. New gui/titlebar.py.
+- Nov 22 2026 - Settings button opens Morosa's own settings dialog (Display, Audio, Paths). Trim, status, audio, AmiSys moved there. New gui/settings_dialog.py.
+- Nov 22 2026 - Machine tab is now Quickstart: Model, CPU, Fast RAM, Video, Zorro boards, Start button.
+- Nov 22 2026 - Settings: ribbon (Start, Pause, Stop, Save), page list falls back to icons. Unemulated options greyed. New gui/settings_pages.py.
+- Nov 22 2026 - Quickstart page: Model, Video, Config list (sets CPU, Fast RAM), DF0/DF1 synced with Floppy page.
+- Nov 22 2026 - CPU page: 24-bit addressing and CPU speed (7, 14, 25, 50 MHz) work. JIT greyed, interpreter core. Rebuild needed (glue.c set_amask).
+- Nov 22 2026 - Ribbon is Start, Pause, Stop. Save moved to title bar after the title.
+- Nov 22 2026 - Ribbon removed. Play, Pause, Stop, Save, AmiSys now on title bar right side.
+- Nov 22 2026 - Chipset page: OCS or ECS override on non-AGA models. Blitter, collision, fast copper greyed.
+- Nov 22 2026 - Chipset page: Chunky to planar switch for CD32 Akiko works. Planar to chunky greyed, no such hardware.
+- Nov 22 2026 - RAM page: Chip RAM size (256 KB to 2 MB) works. Slow, Z2, Z3 greyed.
+- Nov 22 2026 - Floppy page: disk swapper list (insert into any drive, live) and WHDLoad tab (greyed) merged in.
+- Nov 22 2026 - Hard drives page: table layout with Boot Pri column, Create hardfile button.
+- Nov 22 2026 - Blitter area fill and Paula audio tick moved to C (video.c). Blit result checked against old code.
+- Nov 22 2026 - Paula Plus: 8 or 16 channels, 8/16/24/32 bit samples. Extra channels at $DFF400, format reg at +$C, XDMACON $DFF4F0.
+- Nov 22 2026 - Sound page: output Qt default or PipeWire (pw-cat), sample rate, Paula Plus depth and channels.
+- Nov 22 2026 - Display page: line mode (scanlines), filter (smooth), aspect (4:3, 16:9) work.
+- Nov 22 2026 - RAM page: Slow RAM (512 KB to 1.8 MB at $C00000) works.
+- Nov 22 2026 - ROM page lists Kickstart ROMs found in the ROMs folder (default ~/Roms/Amiga). Folder set in [Settings] Paths. New methods/rom_scan.py.
+- Nov 22 2026 - Hardware info page shows the current config. Misc: pause when window loses focus works.
+- Nov 22 2026 - IO Ports page: game ports 1 and 2 take mouse, joystick or none. Parallel, serial, USB greyed.
+- Nov 22 2026 - RAM page: Z2 Fast, Z3 Fast and Processor slot Fast RAM work. Z3 needs 68030 or better.
+- Nov 22 2026 - Virtual keyboard: Scroll Lock shows it, modifiers stick, optional show on start. New gui/vkeyboard.py.
+- Nov 22 2026 - Floppy: untick Write-protected and the Amiga writes back to the ADF file (saved on stop, eject swap).
+- FPU choice: None/68881/68882/internal wired to Musashi (set_fpu); build regenerates m68kops when m68k_in.c changes.
+- Nov 22 2026 - TODO (low priority): RISC/ARM coprocessor, ARMv5TE (ARM9) then ARMv6; shared memory window and mailbox.
+- Nov 22 2026 - CPU page: CPU and Speed share a row; FPU and options laid out in rows.
+- Nov 22 2026 - Chipset: sprite and playfield collisions computed in render (CLXDAT, CLXCON). Collision level setting still greyed.
+- Nov 22 2026 - Chipset: Collision level radios work (None, Sprites, Sprites vs playfield, Full).
+- Nov 22 2026 - Agnus: BEAMCON0, HTOTAL, VTOTAL on ECS/AGA. PAL/NTSC switch, variable frame size, doubled modes draw 1:1. Scan doubling radios stay greyed.
+- Nov 22 2026 - Misc: Right Ctrl = Amiga key works (needs X11/Wayland keysym).
+- Nov 22 2026 - Sound: filter (Off, A500, A1200 with LED) and stereo separation work.
+- Nov 22 2026 - Display: Upscale Fit, x2, x3, x4 (x1 = one Amiga low-res pixel); window resizes.
+- Nov 22 2026 - Chipset: Blitter Normal mode (busy and interrupt follow estimated time) or Immediate. Wait for blitter greyed.
+- Nov 22 2026 - Expansions page lists fitted RAM boards. Picasso IV and Ethernet greyed, no emulation yet.
+- Nov 22 2026 - Denise: Super-hires (BPLCON0 bit 6) fetch and draw. Was blank before.
+- Nov 22 2026 - Agnus: VTOTAL register address fixed (0x1C8); super-hires fetches twice the words per line.
+- Nov 22 2026 - Agnus: super-hires fetch width matches AGA (84 words at DDF 38-D8, FMODE 3). Added MOROSA_REGLOG=1 register log.
+- Nov 22 2026 - RTG option B: Cirrus GD5446 chip (cirrus.py) and Picasso IV Zorro III board (picasso.py), 8/15/16/24/32 bit, blitter, cursor. Untested with a real Picasso96 driver. MOROSA_RTGLOG=1 logs ports.
+- Nov 22 2026 - Zorro III autoconfig fixed: low nibbles at +$100 were missing, so no Z3 board was ever configured.

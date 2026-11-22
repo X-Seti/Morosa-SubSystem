@@ -1,4 +1,4 @@
-#this belongs in apps/hardware/input.py - Version: 1
+#this belongs in apps/hardware/input.py - Version: 3
 # X-Seti - November 17 2026 - Morosa - Morosa Keyboard, Mouse and Joystick.
 
 """
@@ -11,6 +11,8 @@ Morosa Input - Amiga keyboard serial protocol on CIA-A, mouse counters and joyst
 # Keyboard.press
 # Keyboard.release
 # Ports
+# Ports._dat
+# Ports._press
 # Ports.fire_bits
 # Ports.joy
 # Ports.mouse_button
@@ -53,10 +55,11 @@ class Keyboard:
 class Ports:
     """Game port 1 mouse (JOY0DAT), game port 2 joystick (JOY1DAT); buttons reach CIA-A PRA and POTGOR."""
 
-    def __init__(self):  #vers 1
+    def __init__(self):  #vers 2
+        self.devs = ["mouse", "joy"]
         self.x = self.y = 0
         self.left = self.right = False
-        self.up = self.down = self.jl = self.jr = self.fire = False
+        self.up = self.down = self.jl = self.jr = self.fire = self.fire2 = False
 
     def mouse_move(self, dx: int, dy: int) -> None:  #vers 1
         self.x = self.x + dx & 0xFF
@@ -68,24 +71,37 @@ class Ports:
         if right is not None:
             self.right = right
 
-    def joy(self, up=False, down=False, left=False, right=False, fire=False) -> None:  #vers 1
-        self.up, self.down, self.jl, self.jr, self.fire = up, down, left, right, fire
+    def joy(self, up=False, down=False, left=False, right=False, fire=False, fire2=False) -> None:  #vers 2
+        self.up, self.down, self.jl, self.jr, self.fire, self.fire2 = up, down, left, right, fire, fire2
 
-    def fire_bits(self) -> int:  #vers 1
-        """CIA-A PRA input bits 7 and 6, active low."""
-        return 0xC0 & ~(0x40 if self.left else 0) & ~(0x80 if self.fire else 0)
-
-    def read(self, off: int):  #vers 1
-        if off == 0x00A:
+    def _dat(self, dev: str) -> int:  #vers 1
+        """JOYxDAT value for what is plugged in: mouse, joy or none."""
+        if dev == "mouse":
             return self.y << 8 | self.x
+        if dev == "joy":
+            r, l, u, d = (1 if x else 0 for x in (self.jr, self.jl, self.up, self.down))
+            return l << 9 | (l ^ u) << 8 | r << 1 | (r ^ d)
+        return 0
+
+    def _press(self, dev: str, second: bool) -> bool:  #vers 1
+        """Button state on a port: first or second button of the plugged device."""
+        if dev == "mouse":
+            return self.right if second else self.left
+        if dev == "joy":
+            return self.fire2 if second else self.fire
+        return False
+
+    def fire_bits(self) -> int:  #vers 2
+        """CIA-A PRA input bits 6 (port 1) and 7 (port 2), active low."""
+        return 0xC0 & ~(0x40 if self._press(self.devs[0], False) else 0) & ~(0x80 if self._press(self.devs[1], False) else 0)
+
+    def read(self, off: int):  #vers 3
+        if off == 0x00A:
+            return self._dat(self.devs[0])
         if off == 0x00C:
-            r = 1 if self.jr else 0
-            l = 1 if self.jl else 0
-            u = 1 if self.up else 0
-            d = 1 if self.down else 0
-            return (l << 9 | (l ^ u) << 8 | r << 1 | (r ^ d))
+            return self._dat(self.devs[1])
         if off == 0x016:
-            return 0xFFFF & ~(0x400 if self.right else 0)
+            return 0xFFFF & ~(0x400 if self._press(self.devs[0], True) else 0) & ~(0x4000 if self._press(self.devs[1], True) else 0)
         return None
 
     def write(self, off: int, v: int) -> bool:  #vers 1

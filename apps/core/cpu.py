@@ -1,4 +1,4 @@
-#this belongs in apps/core/cpu.py - Version: 5
+#this belongs in apps/core/cpu.py - Version: 7
 # X-Seti - November 17 2026 - Morosa - Morosa 68k CPU Core.
 
 """
@@ -6,22 +6,6 @@ Morosa 68k CPU Core - interpreter for the Motorola 68000, 68010, 68020, 68030, 6
 """
 
 ##Methods list -
-# AddressError
-# AddressError.__init__
-# Bus
-# Bus.__init__
-# Bus._hook
-# Bus.hook_range
-# Bus.r16
-# Bus.r32
-# Bus.r8
-# Bus.read
-# Bus.w16
-# Bus.w32
-# Bus.w8
-# Bus.write
-# BusError
-# BusError.__init__
 # CPU
 # CPU.__init__
 # CPU._bank
@@ -104,6 +88,7 @@ Morosa 68k CPU Core - interpreter for the Motorola 68000, 68010, 68020, 68030, 6
 
 from apps.core.fpu import FPU, FpuTrap
 from apps.core.mmu import MMU
+from apps.methods.bus import AddressError, Bus, BusError
 
 SIZE_MASK = (0xFF, 0xFFFF, 0xFFFFFFFF)
 SIZE_MSB = (0x80, 0x8000, 0x80000000)
@@ -118,144 +103,11 @@ class IllegalInstruction(Exception):
     """An opcode the core cannot run."""
 
 
-class BusError(Exception):
-    """Access outside memory with no hook, or an MMU fault."""
-
-    def __init__(self, msg="", addr=0, write=False):  #vers 1
-        super().__init__(msg)
-        self.addr = addr
-        self.write = write
-
-
-class AddressError(Exception):
-    """Word or long access at an odd address on a 68000 or 68010."""
-
-    def __init__(self, addr, write=False):
-        super().__init__(f"address error at {addr:08x}")
-        self.addr, self.write = addr, write
-
-
 def sext(v: int, size: int) -> int:  #vers 1
     """Signed value of v in size (0 byte, 1 word, 2 long)."""
     m, s = SIZE_MASK[size], SIZE_MSB[size]
     v &= m
     return v - (m + 1) if v & s else v
-
-
-class Bus:
-    """Flat RAM plus hooked address ranges for chips and library stubs."""
-
-    def __init__(self, size: int = 16 * 1024 * 1024):  #vers 1
-        self.ram = bytearray(size)
-        self.size = size
-        self.ranges = []
-        self.amask = 0xFFFFFFFF
-        self.strict = False
-        self.mmu = None
-        self.xl = False
-        self.sup = True
-        self.open_bus = False
-        self.open_ranges = []
-        self.open_value = 0
-        self.berr_on = None
-
-    def hook_range(self, start: int, end: int, read=None, write=None) -> None:  #vers 1
-        """read(addr, size) -> int and write(addr, size, value) cover [start, end)."""
-        self.ranges.append((start, end, read, write))
-
-    def _hook(self, a, write):  #vers 3
-        for s, e, r, w in self.ranges:
-            if s <= a < e:
-                f = w if write else r
-                if f:
-                    return f
-        if self.open_bus or any(s <= a < e for s, e in self.open_ranges) or (self.berr_on and not self.berr_on()):
-            return (lambda a, size, v=0: None) if write else (lambda a, size: self.open_value)
-        raise BusError(f"bus error at {a:08x}")
-
-    def r8(self, a):  #vers 2
-        a &= self.amask
-        if self.xl:
-            a = self.mmu.xlate(a, False, self.sup) & self.amask
-        if a < self.size:
-            return self.ram[a]
-        return self._hook(a, False)(a, 0) & 0xFF
-
-    def r16(self, a):  #vers 2
-        a &= self.amask
-        if self.xl:
-            if (a & self.mmu.pmask) == self.mmu.pmask:
-                return (self.r8(a) << 8) | self.r8(a + 1)
-            a = self.mmu.xlate(a, False, self.sup) & self.amask
-        if self.strict and a & 1:
-            raise AddressError(a)
-        if a + 1 < self.size:
-            r = self.ram
-            return (r[a] << 8) | r[a + 1]
-        return self._hook(a, False)(a, 1) & 0xFFFF
-
-    def r32(self, a):  #vers 2
-        a &= self.amask
-        if self.xl:
-            if (a & self.mmu.pmask) > self.mmu.pmask - 3:
-                return (self.r16(a) << 16) | self.r16(a + 2)
-            a = self.mmu.xlate(a, False, self.sup) & self.amask
-        if self.strict and a & 1:
-            raise AddressError(a)
-        if a + 3 < self.size:
-            r = self.ram
-            return (r[a] << 24) | (r[a + 1] << 16) | (r[a + 2] << 8) | r[a + 3]
-        return self._hook(a, False)(a, 2) & 0xFFFFFFFF
-
-    def w8(self, a, v):  #vers 2
-        a &= self.amask
-        if self.xl:
-            a = self.mmu.xlate(a, True, self.sup) & self.amask
-        if a < self.size:
-            self.ram[a] = v & 0xFF
-        else:
-            self._hook(a, True)(a, 0, v & 0xFF)
-
-    def w16(self, a, v):  #vers 2
-        a &= self.amask
-        if self.xl:
-            if (a & self.mmu.pmask) == self.mmu.pmask:
-                self.w8(a, v >> 8)
-                self.w8(a + 1, v)
-                return
-            a = self.mmu.xlate(a, True, self.sup) & self.amask
-        if self.strict and a & 1:
-            raise AddressError(a, True)
-        if a + 1 < self.size:
-            self.ram[a] = (v >> 8) & 0xFF
-            self.ram[a + 1] = v & 0xFF
-        else:
-            self._hook(a, True)(a, 1, v & 0xFFFF)
-
-    def w32(self, a, v):  #vers 2
-        a &= self.amask
-        if self.xl:
-            if (a & self.mmu.pmask) > self.mmu.pmask - 3:
-                self.w16(a, v >> 16)
-                self.w16(a + 2, v)
-                return
-            a = self.mmu.xlate(a, True, self.sup) & self.amask
-        if self.strict and a & 1:
-            raise AddressError(a, True)
-        if a + 3 < self.size:
-            r = self.ram
-            r[a] = (v >> 24) & 0xFF
-            r[a + 1] = (v >> 16) & 0xFF
-            r[a + 2] = (v >> 8) & 0xFF
-            r[a + 3] = v & 0xFF
-        else:
-            self._hook(a, True)(a, 2, v & 0xFFFFFFFF)
-
-    def read(self, a, size):  #vers 1
-        return (self.r8, self.r16, self.r32)[size](a)
-
-    def write(self, a, size, v):  #vers 1
-        (self.w8, self.w16, self.w32)[size](a, v)
 
 
 class CPU:

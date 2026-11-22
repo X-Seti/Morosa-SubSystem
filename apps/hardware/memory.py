@@ -1,15 +1,18 @@
-#this belongs in apps/hardware/memory.py - Version: 1
-# X-Seti - November 17 2026 - Morosa - Morosa Sparse Memory.
+#this belongs in apps/hardware/memory.py - Version: 2
+# X-Seti - November 21 2026 - Morosa - Morosa Sparse Memory.
 
 """
-Morosa Memory - paged RAM that allocates 64K pages on first write, so large fast RAM costs only what is used.
+Morosa Memory - anonymous mapped RAM; the OS commits pages on first touch and the native core reads buf directly.
 """
 
 ##Methods list -
-# SparseRAM
-# SparseRAM.read
-# SparseRAM.used
-# SparseRAM.write
+##class SparseRAM: -
+# __init__
+# read
+# used
+# write
+
+import mmap
 
 PAGE = 0x10000
 
@@ -17,27 +20,15 @@ PAGE = 0x10000
 class SparseRAM:
     """size bytes of RAM; untouched pages read as zero and take no memory."""
 
-    def __init__(self, size: int):  #vers 1
+    def __init__(self, size: int):  #vers 2
         self.size = size
-        self.pages = {}
+        self.buf = mmap.mmap(-1, size) if size else bytearray(0)
 
-    def read(self, off: int, n: int) -> int:  #vers 1
-        v = 0
-        for i in range(n):
-            p = self.pages.get((off + i) // PAGE)
-            v = v << 8 | (p[(off + i) % PAGE] if p else 0)
-        return v
+    def read(self, off: int, n: int) -> int:  #vers 2
+        return int.from_bytes(self.buf[off:off + n], "big")
 
-    def write(self, off: int, n: int, v: int) -> None:  #vers 1
-        for i in range(n):
-            a = off + i
-            p = self.pages.get(a // PAGE)
-            b = v >> 8 * (n - 1 - i) & 255
-            if p is None:
-                if not b:
-                    continue
-                p = self.pages[a // PAGE] = bytearray(PAGE)
-            p[a % PAGE] = b
+    def write(self, off: int, n: int, v: int) -> None:  #vers 2
+        self.buf[off:off + n] = v.to_bytes(n, "big")
 
-    def used(self) -> int:  #vers 1
-        return len(self.pages) * PAGE
+    def used(self) -> int:  #vers 2
+        return sum(PAGE for i in range(0, self.size, PAGE) if any(self.buf[i:i + PAGE]))

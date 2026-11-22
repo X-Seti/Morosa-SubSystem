@@ -1,4 +1,4 @@
-#this belongs in apps/hardware/blitter.py - Version: 2
+#this belongs in apps/hardware/blitter.py - Version: 5
 # X-Seti - November 17 2026 - Morosa - Morosa Blitter.
 
 """
@@ -14,6 +14,8 @@ Morosa Blitter - Agnus blitter: area copy with minterms, shifts, masks and fill;
 # Blitter.start
 # Blitter.write
 
+from apps.core import video_ext
+
 REGS = {0x040: "con0", 0x042: "con1", 0x044: "afwm", 0x046: "alwm", 0x060: "cmod", 0x062: "bmod", 0x064: "amod",
         0x066: "dmod", 0x070: "cdat", 0x072: "bdat", 0x074: "adat"}
 PTRS = {0x048: ("cpt", True), 0x04A: ("cpt", False), 0x04C: ("bpt", True), 0x04E: ("bpt", False),
@@ -25,6 +27,7 @@ class Blitter:
 
     def __init__(self, read16, write16, done=None, ecs: bool = False):  #vers 1
         self.read16, self.write16 = read16, write16
+        self.chip, self.mask = bytearray(8), 0
         self.done = done or (lambda: None)
         self.ecs = ecs
         self.con0 = self.con1 = self.afwm = self.alwm = 0
@@ -34,6 +37,7 @@ class Blitter:
         self.busy = False
         self.zero = True
         self.sizv = 0
+        self.mode, self.wait = 0, 0
 
     def write(self, off: int, v: int) -> bool:  #vers 1
         v &= 0xFFFF
@@ -70,73 +74,45 @@ class Blitter:
                 out |= (a if i & 4 else ~a) & (b if i & 2 else ~b) & (c if i & 1 else ~c)
         return out & 0xFFFF
 
-    def start(self, width: int, height: int) -> None:  #vers 1
+    def start(self, width: int, height: int) -> None:  #vers 2
         self.busy = True
         self.zero = True
         if self.con1 & 1:
             self._line(height)
         else:
             self._area(width, height)
+        if self.mode == 1:
+            n = bin(self.con0 >> 8 & 15).count("1")
+            self.wait = max(1, (height * 8) if self.con1 & 1 else width * height * (4 if n >= 3 else 2))
+            return
         self.busy = False
         self.done()
 
-    def _area(self, width: int, height: int) -> None:  #vers 1
-        c0, c1 = self.con0, self.con1
-        use_a, use_b, use_c, use_d = c0 >> 11 & 1, c0 >> 10 & 1, c0 >> 9 & 1, c0 >> 8 & 1
-        ash, bsh, lf = c0 >> 12, c1 >> 12, c0 & 0xFF
-        desc = bool(c1 & 2)
-        fill_ex, fill_in = bool(c1 & 0x10), bool(c1 & 0x08)
-        step = -2 if desc else 2
-        for _ in range(height):
-            fci = c1 >> 2 & 1
-            a_prev = b_prev = 0
-            for w in range(width):
-                if use_a:
-                    self.adat = self.read16(self.apt)
-                    self.apt += step
-                if use_b:
-                    self.bdat = self.read16(self.bpt)
-                    self.bpt += step
-                if use_c:
-                    self.cdat = self.read16(self.cpt)
-                    self.cpt += step
-                a = self.adat
-                if w == (width - 1 if desc else 0):
-                    a &= self.afwm
-                if w == (0 if desc else width - 1):
-                    a &= self.alwm
-                if desc:
-                    ah = ((a << 16 | a_prev) << ash >> 16) & 0xFFFF
-                    bh = ((self.bdat << 16 | b_prev) << bsh >> 16) & 0xFFFF
-                else:
-                    ah = ((a_prev << 16 | a) >> ash) & 0xFFFF
-                    bh = ((b_prev << 16 | self.bdat) >> bsh) & 0xFFFF
-                a_prev, b_prev = a, self.bdat
-                d = self._minterm(lf, ah, bh, self.cdat)
-                if fill_ex or fill_in:
-                    out, fc = 0, fci
-                    for i in range(16):
-                        bit = d >> i & 1
-                        out |= ((bit | fc) if fill_in else (bit ^ fc)) << i
-                        fc ^= bit
-                    fci, d = fc, out
-                if d:
-                    self.zero = False
-                if use_d:
-                    self.write16(self.dpt, d)
-                    self.dpt += step
-            for name, mod, used in (("apt", self.amod, use_a), ("bpt", self.bmod, use_b), ("cpt", self.cmod, use_c), ("dpt", self.dmod, use_d)):
-                if used:
-                    setattr(self, name, getattr(self, name) + (-mod if desc else mod))
+    def tick(self, cclocks: int) -> None:  #vers 1
+        """Normal mode: busy and the interrupt follow the estimated blit time."""
+        if self.wait:
+            self.wait -= cclocks
+            if self.wait <= 0:
+                self.wait = 0
+                self.busy = False
+                self.done()
 
-    def _line(self, length: int) -> None:  #vers 2
+    def _area(self, width: int, height: int) -> None:  #vers 3
+        """Area mode runs in video_ext; pointers and data registers come back."""
+        r = video_ext.blit_area(self.chip, self.mask, self.con0, self.con1, self.afwm, self.alwm, self.adat, self.bdat, self.cdat,
+                                self.apt, self.bpt, self.cpt, self.dpt, self.amod, self.bmod, self.cmod, self.dmod, width, height)
+        self.apt, self.bpt, self.cpt, self.dpt, self.adat, self.bdat, self.cdat = r[:7]
+        if not r[7]:
+            self.zero = False
+
+    def _line(self, length: int) -> None:  #vers 3
         """Line mode: pixel at bit ash of the word at cpt; SUD set means X major."""
         c0, c1 = self.con0, self.con1
         ash, lf = c0 >> 12, c0 & 0xFF
         sud, sul, aul = c1 >> 4 & 1, c1 >> 3 & 1, c1 >> 2 & 1
         sign = c1 >> 6 & 1
         bsh = c1 >> 12
-        err = self.apt - 0x10000 if self.apt & 0x8000 else self.apt
+        err = (self.apt & 0xFFFF) - 0x10000 if self.apt & 0x8000 else self.apt & 0xFFFF
         cpt = self.cpt
         row = self.cmod
 

@@ -1,4 +1,4 @@
-#this belongs in apps/hardware/cdimage.py - Version: 2
+#this belongs in apps/hardware/cdimage.py - Version: 3
 # X-Seti - November 18 2026 - Morosa - Morosa CD Image.
 
 """
@@ -41,6 +41,8 @@ def is_cd_image(path: str) -> bool:  #vers 1
 
 class CDImage:
     """tracks: dicts with num, audio, size, skip, map, foff, start, blocks. Disc LBAs run across tracks."""
+
+    reads = 0
 
     def __init__(self, path: str):  #vers 1
         self.tracks = []
@@ -115,16 +117,18 @@ class CDImage:
                 return t
         return None
 
-    def read(self, lba: int) -> bytes:  #vers 1
+    def read(self, lba: int) -> bytes:  #vers 2
         """One 2048 byte data sector, or None if the sector is outside a data track."""
+        CDImage.reads += 1
         t = self.track_at(lba)
         if t is None or t["audio"]:
             return None
         o = t["foff"] + (lba - t["start"]) * t["size"] + t["skip"]
         return bytes(t["map"][o:o + 2048])
 
-    def read_raw(self, lba: int) -> bytes:  #vers 1
+    def read_raw(self, lba: int) -> bytes:  #vers 2
         """One 2352 byte mode 1 sector; 2048 byte images get sync, header and zero EDC."""
+        CDImage.reads += 1
         t = self.track_at(lba)
         if t is None or t["audio"]:
             return None

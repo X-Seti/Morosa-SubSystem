@@ -1,4 +1,4 @@
-#this belongs in apps/methods/config.py - Version: 6
+#this belongs in apps/methods/config.py - Version: 28
 # X-Seti - November 17 2026 - Morosa - Morosa Subsystem.
 
 """
@@ -7,11 +7,18 @@ Morosa Subsystem - AmiSys: folder handling and hunk executable check for the Mor
 
 ##Methods list -
 # amisys_dir
+# roms_dir
+# configs_dir
 # ensure_amisys
 # is_exe
+# last_dir
 # set_amisys
+# set_roms_dir
+# set_last_dir
 # build_machine
 # delete_profile
+# export_profile
+# import_profile
 # profiles
 # save_profile
 
@@ -43,6 +50,19 @@ def set_amisys(path: str): #vers 1
     CONFIG.write_text(json.dumps(d, indent=1), encoding="utf-8")
 
 
+def roms_dir() -> str: #vers 1
+    """Host folder scanned for Kickstart ROMs; ~/Roms/Amiga by default."""
+    return _load().get("roms") or str(Path.home() / "Roms" / "Amiga")
+
+
+def set_roms_dir(path: str): #vers 1
+    """Choose the folder scanned for Kickstart ROMs."""
+    CONFIG.parent.mkdir(parents=True, exist_ok=True)
+    d = _load()
+    d["roms"] = path
+    CONFIG.write_text(json.dumps(d, indent=1), encoding="utf-8")
+
+
 def ensure_amisys() -> str: #vers 2
     """Create the AmiSys folder with the standard drawers; returns its path."""
     base = Path(amisys_dir())
@@ -64,10 +84,54 @@ def is_exe(path: str) -> bool: #vers 1
 # ---- machine profiles ----
 HD_SLOTS = 12
 PROFILE_DEFAULT = {"preset": "A500", "cpu": 0, "fast_mb": 0, "pal": True, "rom": "", "bootstrap": "", "df": ["", "", "", ""],
-                   "hd": [""] * HD_SLOTS, "hdf_write": False, "hf_heads": 16, "hf_spt": 63, "boards_kb": [], "audio": True}
+                   "hd": [""] * HD_SLOTS, "hd_pri": [-i for i in range(HD_SLOTS)], "hdf_write": False, "addr24": False, "fpu": 3, "clx": 3, "rtg": False, "rtg_mb": 4, "rctrl": False, "blit": 0, "snd_filter": 0, "snd_sep": 100, "mhz": 0, "chipset": "", "c2p": True, "chip_kb": 0, "snd_ch": 4, "snd_bits": 8, "snd_rate": 44100, "snd_out": "qt", "slow_kb": 0, "pause_unfocus": False, "df_write": [False] * 4, "vkeyboard": False, "z2_kb": 0, "z3_kb": 0, "proc_kb": 0, "port0": "mouse", "port1": "joy", "disp_line": 0, "disp_filter": 0, "disp_aspect": 0, "disp_scale": 0, "swapper": [], "hf_heads": 16, "hf_spt": 63, "boards_kb": [], "audio": True, "status": True, "trim": False,
+                   "joykeys": {"up": 16777235, "down": 16777237, "left": 16777234, "right": 16777236, "fire": 16777249, "fire2": 16777251}}
 
 
-def profiles() -> dict:  #vers 2
+def configs_dir() -> Path:  #vers 1
+    """Folder inside Morosa that holds exported configs."""
+    d = ROOT / "configs"
+    d.mkdir(exist_ok=True)
+    return d
+
+
+def export_profile(name: str) -> Path:  #vers 1
+    """Write one saved profile to configs/<name>.json."""
+    p = profiles()[name]
+    path = configs_dir() / (name.replace("/", "_") + ".json")
+    path.write_text(json.dumps({"name": name, "profile": {k: p[k] for k in PROFILE_DEFAULT if k in p}}, indent=1), encoding="utf-8")
+    return path
+
+
+def import_profile(path: str) -> str:  #vers 1
+    """Load an exported config as a new profile; a taken name gets a number. Returns the name."""
+    d = json.loads(Path(path).read_text(encoding="utf-8"))
+    prof = d.get("profile") if isinstance(d, dict) and "profile" in d else d
+    if not isinstance(prof, dict):
+        raise ValueError("Not a Morosa config file")
+    name = str(d.get("name") or Path(path).stem) if isinstance(d, dict) else Path(path).stem
+    have = profiles()
+    new, n = name, 2
+    while new in have:
+        new, n = f"{name} ({n})", n + 1
+    save_profile(new, {**PROFILE_DEFAULT, **prof})
+    return new
+
+
+def last_dir(kind: str) -> str:  #vers 1
+    """Folder last used to browse for kind (rom, adf, hdf, ...)."""
+    d = _load().get("dirs", {}).get(kind, "")
+    return d if os.path.isdir(d) else ""
+
+
+def set_last_dir(kind: str, path: str) -> None:  #vers 1
+    CONFIG.parent.mkdir(parents=True, exist_ok=True)
+    d = _load()
+    d.setdefault("dirs", {})[kind] = path
+    CONFIG.write_text(json.dumps(d, indent=1), encoding="utf-8")
+
+
+def profiles() -> dict:  #vers 3
     """All saved machine profiles {name: settings}; old hdf lists move to hd."""
     out = {}
     for k, v in _load().get("profiles", {}).items():
@@ -76,6 +140,11 @@ def profiles() -> dict:  #vers 2
         if old and "hd" not in v:
             p["hd"] = (list(old) + [""] * HD_SLOTS)[:HD_SLOTS]
         p["hd"] = (list(p["hd"]) + [""] * HD_SLOTS)[:HD_SLOTS]
+        if "hd_pri" not in v:
+            old = list(v.get("hd_boot", [])) + [False] * HD_SLOTS
+            p["hd_pri"] = [0 if old[i] else -i for i in range(HD_SLOTS)]
+        p["hd_pri"] = ([int(x) for x in p["hd_pri"]] + [-i for i in range(HD_SLOTS)])[:HD_SLOTS]
+        p.pop("hd_boot", None)
         p.pop("hdf", None)
         out[k] = p
     return out
@@ -94,15 +163,31 @@ def delete_profile(name: str) -> None:  #vers 1
     CONFIG.write_text(json.dumps(d, indent=1), encoding="utf-8")
 
 
-def build_machine(profile: dict):  #vers 6
+def build_machine(profile: dict):  #vers 16
     """Create an Amiga from a profile; raises OSError or ValueError for bad files or settings."""
     import mmap
     from apps.hardware.amiga import Amiga
     from apps.hardware.zorro import RamBoard
     p = {**PROFILE_DEFAULT, **profile}
-    m = Amiga(p["preset"], p["fast_mb"] * 1024, p["pal"], p["cpu"] or None)
+    m = Amiga(p["preset"], p["fast_mb"] * 1024, p["pal"], p["cpu"] or None, p.get("addr24", False), p.get("mhz", 0), p.get("chipset", ""), p.get("chip_kb", 0), (p["snd_ch"], p["snd_bits"], p["snd_rate"]), p["slow_kb"], (p["port0"], p["port1"]), p["proc_kb"], (0, 1, 1, 2)[p.get("fpu", 3)], p.get("clx", 3))
+    if m.akiko:
+        m.akiko.c2p_on = p["c2p"]
+    m.blitter.mode = p.get("blit", 0)
+    m.paula.filter_mode, m.paula.sep = p.get("snd_filter", 0), p.get("snd_sep", 100)
+    m.paula.led = lambda: bool(m.ciaa.ddra & 2) and not m.ciaa.pra & 2
+    if p["z2_kb"]:
+        m.add_board(RamBoard(int(p["z2_kb"]), 2))
+    if p["z3_kb"]:
+        if m.cpu.model < 68030:
+            raise ValueError("Zorro III RAM needs a 68030 or better")
+        m.add_board(RamBoard(int(p["z3_kb"]), 3))
     for kb in p["boards_kb"]:
         m.add_board(RamBoard(int(kb), 3 if m.cpu.model >= 68030 else 2))
+    if p.get("rtg"):
+        if m.cpu.model < 68030:
+            raise ValueError("Picasso IV is Zorro III and needs a 68030 or better")
+        from apps.hardware.picasso import PicassoIV
+        m.add_board(PicassoIV(p.get("rtg_mb", 4), (lambda s: open("morosa_rtglog.txt", "a").write(s + "\n")) if os.environ.get("MOROSA_RTGLOG") else None))
     if p["bootstrap"]:
         if p["preset"] != "A1000":
             raise ValueError("a boot ROM is only supported on the A1000")
@@ -120,7 +205,7 @@ def build_machine(profile: dict):  #vers 6
     for unit, path in enumerate(p["df"]):
         if path:
             with open(path, "rb") as f:
-                m.insert_disk(f.read(), unit, True)
+                m.insert_disk(f.read(), unit, not p["df_write"][unit], path)
     for unit, path in enumerate(p["hd"]):
         if not path:
             continue
@@ -146,13 +231,15 @@ def build_machine(profile: dict):  #vers 6
             continue
         if os.path.isdir(path):
             from apps.methods import folder_disk
-            image = folder_disk.build_image(path, f"DH{unit}", -unit)
+            pri = p["hd_pri"][unit]
+            root = folder_disk.boot_root(path) if pri > -128 else path
+            image = folder_disk.build_image(root, f"DH{unit}", pri)
         else:
             f = open(path, "r+b" if p["hdf_write"] else "rb")
             image = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_WRITE if p["hdf_write"] else mmap.ACCESS_COPY)
             from apps.methods import hardfile
             if not hardfile.has_rdb(image):
-                image = hardfile.HardfileImage(image, p["hf_heads"], p["hf_spt"], f"DH{unit}")
+                image = hardfile.HardfileImage(image, p["hf_heads"], p["hf_spt"], f"DH{unit}", 0, p["hd_pri"][unit])
         if scsi:
             from apps.hardware.scsi import SCSIDisk
             m.attach_scsi(unit - 2, SCSIDisk(image))
