@@ -57,14 +57,31 @@ static PyObject *render_line(PyObject *self, PyObject *args)
     int any_spr = 0, clxd = 0, clxcon = 0;
     static uint8_t spm[FB_WIDTH];
     int sprv[8][5];
+    uint64_t sda[8], sdb[8];
+    int sprw = 16, bc3 = 0, bc4 = 0x11, pver = -1, nrel = 0, havecb = 0;
+    Py_buffer cb;
+    static PyObject *pal_obj = NULL;
+    static int pal_ver = -1, pal_n = 0;
+    static uint32_t pal_cache[256];
 
-    if (!PyArg_ParseTuple(args, "w*iOiiiiiiiiiiiiOOOii", &fbv, &vpos, &planes, &x_abs, &hs, &he, &vs, &ve,
-                          &bc0, &bc1, &bc2, &bpu, &aga, &xorv, &off2, &colors, &sprs, &chgs, &dup, &clxcon))
+    if (!PyArg_ParseTuple(args, "w*iOiiiiiiiiiiiiOOOiiiiii", &fbv, &vpos, &planes, &x_abs, &hs, &he, &vs, &ve,
+                          &bc0, &bc1, &bc2, &bpu, &aga, &xorv, &off2, &colors, &sprs, &chgs, &dup, &clxcon, &sprw, &bc3, &bc4, &pver))
         return NULL;
     if (vpos < 0 || vpos >= FB_LINES)
         goto done_ok;
-    if (load_colors(colors, pal, &npal) < 0 || npal == 0)
-        goto fail;
+    if (pver >= 0 && colors == pal_obj && pver == pal_ver) {
+        memcpy(pal, pal_cache, sizeof(pal));
+        npal = pal_n;
+    } else {
+        if (load_colors(colors, pal, &npal) < 0 || npal == 0)
+            goto fail;
+        if (pver >= 0) {
+            memcpy(pal_cache, pal, sizeof(pal));
+            pal_obj = colors;
+            pal_ver = pver;
+            pal_n = npal;
+        }
+    }
     shres = (bc0 & 0x40) != 0;
     hires = (bc0 & 0x8000) != 0 || shres;
     ham = (bc0 & 0x0800) != 0;
@@ -105,13 +122,36 @@ static PyObject *render_line(PyObject *self, PyObject *args)
         }
     }
     {
-        Py_ssize_t np_ = PySequence_Size(planes);
+        Py_ssize_t np_;
+        if (PyTuple_Check(planes) && PyTuple_GET_SIZE(planes) == 3) {
+            PyObject *offs = PyTuple_GET_ITEM(planes, 1);
+            long n2 = PyLong_AsLong(PyTuple_GET_ITEM(planes, 2)) * 2;
+            Py_ssize_t k;
+            if (PyErr_Occurred() || !PyTuple_Check(offs))
+                goto fail;
+            if (!(vs <= (vpos >> 1) && (vpos >> 1) < ve) || PyTuple_GET_SIZE(offs) == 0 || bpu == 0)
+                goto done_ok;
+            if (PyObject_GetBuffer(PyTuple_GET_ITEM(planes, 0), &cb, PyBUF_SIMPLE) < 0)
+                goto fail;
+            havecb = 1;
+            for (k = 0; k < PyTuple_GET_SIZE(offs) && k < 8; k++) {
+                long o = PyLong_AsLong(PyTuple_GET_ITEM(offs, k));
+                if (PyErr_Occurred() || o < 0 || o + n2 > cb.len)
+                    goto fail;
+                pb[got].buf = (char *)cb.buf + o;
+                pb[got].len = n2;
+                got++;
+            }
+            np_ = 0;
+        } else {
+        np_ = PySequence_Size(planes);
         if (np_ < 0)
             goto fail;
         if (!(vs <= (vpos >> 1) && (vpos >> 1) < ve) || np_ == 0 || bpu == 0)
             goto done_ok;
         if (np_ > 8)
             np_ = 8;
+        }
         for (i = 0; i < np_; i++) {
             PyObject *o = PySequence_GetItem(planes, i);
             if (!o)
@@ -122,6 +162,7 @@ static PyObject *render_line(PyObject *self, PyObject *args)
             }
             Py_DECREF(o);
             got++;
+            nrel++;
         }
     }
     nw = (int)(pb[0].len / 2);
@@ -140,6 +181,28 @@ static PyObject *render_line(PyObject *self, PyObject *args)
             int w = (int)(pb[i].len / 2);
             int sc = (i & 1 ? sc2 : sc1) * (shres ? 4 : hires ? 2 : 1);
             int m = w < nw ? w : nw;
+            if (sc == 0) {
+                static uint64_t tbl[256];
+                static int tinit = 0;
+                int j, nb = m * 2;
+                if (!tinit) {
+                    for (j = 0; j < 256; j++) {
+                        uint64_t v = 0;
+                        int k;
+                        for (k = 0; k < 8; k++)
+                            v |= (uint64_t)(j >> (7 - k) & 1) << (8 * k);
+                        tbl[j] = v;
+                    }
+                    tinit = 1;
+                }
+                for (j = 0; j < nb; j++) {
+                    uint64_t v;
+                    memcpy(&v, pens + j * 8, 8);
+                    v |= tbl[p[j]] << i;
+                    memcpy(pens + j * 8, &v, 8);
+                }
+                continue;
+            }
             for (x = 0; x < m * 16; x++) {
                 int sx = x - sc;
                 if (sx < 0)
@@ -256,7 +319,14 @@ static PyObject *render_line(PyObject *self, PyObject *args)
         for (k = 0; k < 5; k++) {
             o = PySequence_GetItem(t, k);
             if (!o) { Py_DECREF(t); goto fail; }
-            sprv[i][k] = (int)PyLong_AsLong(o);
+            if (k >= 3) {
+                uint64_t u = PyLong_AsUnsignedLongLongMask(o);
+                if (k == 3) sda[i] = u; else sdb[i] = u;
+            }
+            if (k < 3)
+                sprv[i][k] = (int)PyLong_AsLong(o);
+            else
+                sprv[i][k] = 0;
             Py_DECREF(o);
         }
         Py_DECREF(t);
@@ -269,28 +339,41 @@ static PyObject *render_line(PyObject *self, PyObject *args)
             spx[x] = -1, spm[x] = 0;
         for (n = 7; n >= 0; n--) {
             int *s = sprv[n];
-            int hstart, x0, a, b, attached, k;
+            int hp, x35, pw, base, attached, k;
+            uint64_t a = sda[n], b = sdb[n];
             if (!s[0])
                 continue;
-            hstart = (s[1] & 0xFF) << 1 | (s[2] & 1);
-            x0 = (hstart - LEFT_ABS) * 2;
-            a = s[3]; b = s[4];
+            hp = (s[1] & 0xFF) << 3 | (s[2] & 1) << 2;
+            if (aga)
+                hp |= (s[2] >> 4 & 1) << 1 | (s[2] >> 3 & 1);
+            x35 = hp - LEFT_ABS * 4;
+            pw = 4;
+            if (aga) {
+                int sr = bc3 >> 6 & 3;
+                pw = sr == 0 ? (shres ? 2 : 4) : sr == 1 ? 4 : sr == 2 ? 2 : 1;
+            }
+            base = (aga ? (n & 1 ? bc4 & 15 : bc4 >> 4 & 15) << 4 : 16) + 4 * (n >> 1);
             attached = (n & 1) && (s[2] & 0x80);
-            for (i = 0; i < 16; i++) {
-                int v = (a >> (15 - i) & 1) | (b >> (15 - i) & 1) << 1;
+            for (i = 0; i < sprw; i++) {
+                int sh = sprw - 1 - i;
+                int v = (int)(a >> sh & 1) | (int)(b >> sh & 1) << 1;
+                int xa, xb;
                 if (!v)
                     continue;
-                for (k = 0; k < 2; k++) {
-                    int xx = x0 + i * 2 + k;
+                xa = (x35 + i * pw) >> 1;
+                xb = (x35 + (i + 1) * pw + 1) >> 1;
+                if (xb <= xa)
+                    xb = xa + 1;
+                for (k = xa; k < xb; k++) {
+                    int xx = k;
                     if (xx >= 0 && xx < FB_WIDTH) {
                         if (!(n & 1) || (clxcon >> (12 + (n >> 1)) & 1))
                             spm[xx] |= (uint8_t)(1 << (n >> 1));
                         if (attached) {
-                            int *o2 = sprv[n - 1];
-                            int ov = (o2[3] >> (15 - i) & 1) | (o2[4] >> (15 - i) & 1) << 1;
-                            spx[xx] = (int16_t)((n >> 1) << 8 | (16 + (ov | v << 2)));
+                            int ov = (int)(sda[n - 1] >> sh & 1) | (int)(sdb[n - 1] >> sh & 1) << 1;
+                            spx[xx] = (int16_t)((n >> 1) << 8 | ((aga ? (bc4 & 15) << 4 : 16) + (ov | v << 2)));
                         } else
-                            spx[xx] = (int16_t)((n >> 1) << 8 | (16 + 4 * (n >> 1) + v));
+                            spx[xx] = (int16_t)((n >> 1) << 8 | (base + v));
                         have = 1;
                     }
                 }
@@ -337,13 +420,17 @@ static PyObject *render_line(PyObject *self, PyObject *args)
 done_ok:
     if (dup && row && vpos + 1 < FB_LINES)
         memcpy(row + FB_WIDTH, row, FB_WIDTH * 4);
-    for (i = 0; i < got; i++)
+    for (i = 0; i < nrel; i++)
         PyBuffer_Release(&pb[i]);
+    if (havecb)
+        PyBuffer_Release(&cb);
     PyBuffer_Release(&fbv);
     return PyLong_FromLong(clxd);
 fail:
-    for (i = 0; i < got; i++)
+    for (i = 0; i < nrel; i++)
         PyBuffer_Release(&pb[i]);
+    if (havecb)
+        PyBuffer_Release(&cb);
     PyBuffer_Release(&fbv);
     return NULL;
 }

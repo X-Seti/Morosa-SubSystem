@@ -11,6 +11,7 @@ Morosa Agnus - beam counter, DMA control, bitplane and sprite fetch; drives Copp
 # Agnus._fetch_planes
 # Agnus._sprites
 # Agnus.line
+# Agnus.window
 # Agnus.read
 # Agnus.run_frame
 # Agnus.write
@@ -45,6 +46,8 @@ class Agnus:
         self.bplpt = [0] * 8
         self.bpl1mod = self.bpl2mod = 0
         self.diwstrt, self.diwstop = 0x2C81, 0x2CC1
+        self.diwhigh = None
+        self.skip = False
         self.ddfstrt, self.ddfstop = 0x38, 0xD0
         self.sprpt = [0] * 8
         self.sprstate = [dict(vstart=0, vstop=0, active=False, ended=False) for _ in range(8)]
@@ -96,7 +99,10 @@ class Agnus:
     REGLOG = {0x100: "BPLCON0", 0x08E: "DIWSTRT", 0x090: "DIWSTOP", 0x092: "DDFSTRT", 0x094: "DDFSTOP", 0x108: "BPL1MOD", 0x10A: "BPL2MOD",
               0x1FC: "FMODE", 0x1DC: "BEAMCON0", 0x1C0: "HTOTAL", 0x1C8: "VTOTAL", 0x1E4: "DIWHIGH", 0x106: "BPLCON3"}
 
-    def write_reg(self, off: int, v: int) -> None:  #vers 2
+    def write_reg(self, off: int, v: int) -> None:  #vers 3
+        if 0x180 <= off < 0x1C0:
+            self.denise.write(off, v)
+            return
         if off in self.REGLOG and os.environ.get("MOROSA_REGLOG") and self.__dict__.setdefault("_rl", {}).get(off) != v:
             self._rl[off] = v
             with open("morosa_reglog.txt", "a") as f:
@@ -109,9 +115,11 @@ class Agnus:
             self.vpos = (self.vpos & 0xFF) | (v & 1) << 8 if False else (self.vpos & 0xFF | (v & 1) << 8)
             self.lof = bool(v & 0x8000)
         elif off == 0x08E:
-            self.diwstrt = v
+            self.diwstrt, self.diwhigh = v, None
         elif off == 0x090:
-            self.diwstop = v
+            self.diwstop, self.diwhigh = v, None
+        elif off == 0x1E4 and self.model != "ocs":
+            self.diwhigh = v
         elif off == 0x092:
             self.ddfstrt = v & 0xFE
         elif off == 0x094:
@@ -138,7 +146,7 @@ class Agnus:
             pass
 
     # ---- frame ----
-    def _fetch_planes(self) -> list:  #vers 4
+    def _fetch_planes(self):  #vers 5
         bpu = self.denise.nplanes()
         mult = self.denise.fetch_mult()
         hires = bool(self.denise.bplcon0 & 0x8040)
@@ -147,30 +155,52 @@ class Agnus:
         n = ((self.ddfstop - self.ddfstrt) // (4 * mult if hires else 8 * mult) + (2 if hires and mult == 1 else 1)) * mult
         if self.denise.bplcon0 & 0x40:
             n = ((self.ddfstop - self.ddfstrt) // (2 * mult) + (4 if mult == 1 else 1)) * mult
-        planes = []
+        size, chip, mask = 2 * n, self.chip, self.mask
+        offs, rows = [], []
         for i in range(bpu):
             ptr = self.bplpt[i]
-            a = ptr & self.mask & ~1
-            if a + 2 * n <= len(self.chip):
-                planes.append(np.frombuffer(self.chip, dtype=">u2", count=n, offset=a))
-            else:
-                planes.append([self.read16(ptr + 2 * w) for w in range(n)])
-            self.bplpt[i] = ptr + 2 * n + (self.bpl1mod if i % 2 == 0 else self.bpl2mod)
-        return planes
+            a = ptr & mask & ~1
+            offs.append(a)
+            if a + size > len(chip):
+                rows = None
+            self.bplpt[i] = ptr + size + (self.bpl1mod if i % 2 == 0 else self.bpl2mod)
+        if rows is not None:
+            return (chip, tuple(offs), n)
+        return [np.frombuffer(chip, dtype=">u2", count=n, offset=a) if a + size <= len(chip)
+                else [self.read16(a + 2 * w) for w in range(n)] for a in offs]
 
-    def _sprites(self, vpos: int) -> None:  #vers 2
+    def _sprites(self, vpos: int) -> None:  #vers 3
         if not (self.dmacon & DMAEN and self.dmacon & SPREN):
             for s in self.denise.spr:
                 s["armed"] = False
             return
+        w = self.denise.spr_width
+        step, words = w // 8, w // 16
+        aga = getattr(self.denise, "aga", 0)
+
+        def head(n):
+            p = self.sprpt[n]
+            self.sprpt[n] = p + 2 * step
+            return self.read16(p), self.read16(p + 2)
+
+        def vs(pos, ctl):
+            return (pos >> 8 | (ctl >> 2 & 1) << 8 | ((ctl >> 6 & 1) << 9 if aga else 0),
+                    ctl >> 8 | (ctl >> 1 & 1) << 8 | ((ctl >> 5 & 1) << 9 if aga else 0))
+
+        def data(p):
+            a = b = 0
+            for i in range(words):
+                a = a << 16 | self.read16(p + 2 * i)
+                b = b << 16 | self.read16(p + step + 2 * i)
+            return a, b
+
         for n in range(8):
             st, ds = self.sprstate[n], self.denise.spr[n]
             if vpos == 0:
                 st.update(active=False, ended=False)
                 ds["armed"] = False
-                pos, ctl = self.read16(self.sprpt[n]), self.read16(self.sprpt[n] + 2)
-                self.sprpt[n] += 4
-                st["vstart"], st["vstop"] = pos >> 8 | (ctl >> 2 & 1) << 8, ctl >> 8 | (ctl >> 1 & 1) << 8
+                pos, ctl = head(n)
+                st["vstart"], st["vstop"] = vs(pos, ctl)
                 ds["pos"], ds["ctl"] = pos, ctl
                 st["ended"] = not (pos or ctl)
                 continue
@@ -182,18 +212,26 @@ class Agnus:
             if st["active"] and vpos == st["vstop"]:
                 st["active"] = False
                 ds["armed"] = False
-                pos, ctl = self.read16(self.sprpt[n]), self.read16(self.sprpt[n] + 2)
-                self.sprpt[n] += 4
+                pos, ctl = head(n)
                 st["ended"] = not (pos or ctl)
-                st["vstart"], st["vstop"] = pos >> 8 | (ctl >> 2 & 1) << 8, ctl >> 8 | (ctl >> 1 & 1) << 8
+                st["vstart"], st["vstop"] = vs(pos, ctl)
                 ds["pos"], ds["ctl"] = pos, ctl
                 continue
             if st["active"]:
-                a, b = self.read16(self.sprpt[n]), self.read16(self.sprpt[n] + 2)
-                self.sprpt[n] += 4
-                ds["a"], ds["b"], ds["armed"] = a, b, True
+                p = self.sprpt[n]
+                self.sprpt[n] = p + 2 * step
+                ds["a"], ds["b"] = data(p)
+                ds["armed"] = True
 
-    def line(self, cpu_run=None) -> None:  #vers 8
+    def window(self) -> tuple:  #vers 1
+        """(hstart, hstop, vstart, vstop); DIWHIGH gives the upper bits when written."""
+        hs, he, vs, ve = self.diwstrt & 0xFF, self.diwstop & 0xFF, self.diwstrt >> 8, self.diwstop >> 8
+        h = self.diwhigh
+        if h is None:
+            return hs, he | 0x100, vs, ve | (0 if ve & 0x80 else 0x100)
+        return hs | (h >> 5 & 1) << 8, he | (h >> 13 & 1) << 8, vs | (h & 7) << 8, ve | (h >> 8 & 7) << 8
+
+    def line(self, cpu_run=None) -> None:  #vers 10
         v = self.vpos
         if v == 0:
             self.paula.request(INT_VERTB)
@@ -216,11 +254,13 @@ class Agnus:
         if v == 0:
             self._sprites(0)
         self.hpos = self.ccl - 2
-        vs, ve = self.diwstrt >> 8, (self.diwstop >> 8) | (0 if self.diwstop >> 8 & 0x80 else 0x100)
-        hs, he = self.diwstrt & 0xFF, (self.diwstop & 0xFF) | 0x100
-        planes = self._fetch_planes() if vs <= v < ve else []
-        x_abs = 2 * self.ddfstrt + (9 if self.denise.bplcon0 & 0x8040 else 17) + (8 if self.denise.fetch_mult() == 4 else 0)
-        self.denise.render_line(v, planes, x_abs, (hs, he), (vs, ve))
+        hs, he, vs, ve = self.window()
+        if self.skip:
+            self.denise.cw, self.denise.cw0 = [], {}
+        else:
+            planes = self._fetch_planes() if vs <= v < ve else []
+            x_abs = 2 * self.ddfstrt + (9 if self.denise.bplcon0 & 0x8040 else 17) + (8 if self.denise.fetch_mult() == 4 else 0)
+            self.denise.render_line(v, planes, x_abs, (hs, he), (vs, ve))
         if cpu_run:
             cpu_run(self.ccl * 2)
         self.paula.tick(self.ccl)

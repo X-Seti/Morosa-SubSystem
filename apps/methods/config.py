@@ -63,6 +63,18 @@ def set_roms_dir(path: str): #vers 1
     CONFIG.write_text(json.dumps(d, indent=1), encoding="utf-8")
 
 
+def crash_log() -> bool:  #vers 1
+    """True when crash.log writing is on; on by default."""
+    return bool(_load().get("crash_log", True))
+
+
+def set_crash_log(on: bool) -> None:  #vers 1
+    CONFIG.parent.mkdir(parents=True, exist_ok=True)
+    d = _load()
+    d["crash_log"] = bool(on)
+    CONFIG.write_text(json.dumps(d, indent=1), encoding="utf-8")
+
+
 def ensure_amisys() -> str: #vers 2
     """Create the AmiSys folder with the standard drawers; returns its path."""
     base = Path(amisys_dir())
@@ -83,8 +95,8 @@ def is_exe(path: str) -> bool: #vers 1
 
 # ---- machine profiles ----
 HD_SLOTS = 12
-PROFILE_DEFAULT = {"preset": "A500", "cpu": 0, "fast_mb": 0, "pal": True, "rom": "", "bootstrap": "", "df": ["", "", "", ""],
-                   "hd": [""] * HD_SLOTS, "hd_pri": [-i for i in range(HD_SLOTS)], "hdf_write": False, "addr24": False, "fpu": 3, "clx": 3, "rtg": False, "rtg_mb": 4, "rctrl": False, "blit": 0, "snd_filter": 0, "snd_sep": 100, "mhz": 0, "chipset": "", "c2p": True, "chip_kb": 0, "snd_ch": 4, "snd_bits": 8, "snd_rate": 44100, "snd_out": "qt", "slow_kb": 0, "pause_unfocus": False, "df_write": [False] * 4, "vkeyboard": False, "z2_kb": 0, "z3_kb": 0, "proc_kb": 0, "port0": "mouse", "port1": "joy", "disp_line": 0, "disp_filter": 0, "disp_aspect": 0, "disp_scale": 0, "swapper": [], "hf_heads": 16, "hf_spt": 63, "boards_kb": [], "audio": True, "status": True, "trim": False,
+PROFILE_DEFAULT = {"preset": "A500", "cpu": 0, "cpu_name": "", "fast_mb": 0, "pal": True, "rom": "", "ext_rom": "", "xfer": "", "cart": "None", "rtc": False, "bootstrap": "", "df": ["", "", "", ""],
+                   "hd": [""] * HD_SLOTS, "hd_pri": [-i for i in range(HD_SLOTS)], "hd_ss": [""] * HD_SLOTS, "hdf_write": False, "addr24": False, "fpu": 3, "clx": 3, "rtg": False, "rtg_mb": 4, "rctrl": False, "blit": 0, "snd_filter": 0, "snd_sep": 100, "mhz": 0, "chipset": "", "c2p": True, "chip_kb": 0, "snd_ch": 4, "snd_bits": 8, "snd_rate": 44100, "snd_out": "qt", "slow_kb": 0, "pause_unfocus": False, "df_write": [False] * 4, "vkeyboard": False, "z2_kb": 0, "z3_kb": 0, "proc_kb": 0, "port0": "mouse", "port1": "joy", "disp_line": 0, "disp_filter": 0, "disp_aspect": 0, "disp_scale": 0, "swapper": [], "hf_heads": 16, "hf_spt": 63, "boards_kb": [], "audio": True, "status": True, "trim": False,
                    "joykeys": {"up": 16777235, "down": 16777237, "left": 16777234, "right": 16777236, "fire": 16777249, "fire2": 16777251}}
 
 
@@ -144,6 +156,7 @@ def profiles() -> dict:  #vers 3
             old = list(v.get("hd_boot", [])) + [False] * HD_SLOTS
             p["hd_pri"] = [0 if old[i] else -i for i in range(HD_SLOTS)]
         p["hd_pri"] = ([int(x) for x in p["hd_pri"]] + [-i for i in range(HD_SLOTS)])[:HD_SLOTS]
+        p["hd_ss"] = (list(p.get("hd_ss", [])) + [""] * HD_SLOTS)[:HD_SLOTS]
         p.pop("hd_boot", None)
         p.pop("hdf", None)
         out[k] = p
@@ -163,18 +176,27 @@ def delete_profile(name: str) -> None:  #vers 1
     CONFIG.write_text(json.dumps(d, indent=1), encoding="utf-8")
 
 
-def build_machine(profile: dict):  #vers 16
+def build_machine(profile: dict):  #vers 24
     """Create an Amiga from a profile; raises OSError or ValueError for bad files or settings."""
     import mmap
     from apps.hardware.amiga import Amiga
     from apps.hardware.zorro import RamBoard
     p = {**PROFILE_DEFAULT, **profile}
-    m = Amiga(p["preset"], p["fast_mb"] * 1024, p["pal"], p["cpu"] or None, p.get("addr24", False), p.get("mhz", 0), p.get("chipset", ""), p.get("chip_kb", 0), (p["snd_ch"], p["snd_bits"], p["snd_rate"]), p["slow_kb"], (p["port0"], p["port1"]), p["proc_kb"], (0, 1, 1, 2)[p.get("fpu", 3)], p.get("clx", 3))
+    fast_kb = p["fast_mb"] * 1024
+    if p["preset"] == "CD32" and p["cart"] not in ("SX-1", "SX-32", "TF328/TF330/TF360"):
+        fast_kb = 0
+    chip_kb = 0 if p["preset"] in ("A3000", "A1200", "A4000", "A4000D", "A4000T", "CD32") else p.get("chip_kb", 0)
+    board_fast = p["preset"] in ("A1200", "CD32") and fast_kb > 0
+    m = Amiga(p["preset"], 0 if board_fast else fast_kb, p["pal"], p["cpu"] or None, p.get("addr24", False) or (not p["cpu"] and p["preset"] in ("A1200", "CD32")), p.get("mhz", 0), p.get("chipset", ""), chip_kb, (p["snd_ch"], p["snd_bits"], p["snd_rate"]), p["slow_kb"], (p["port0"], p["port1"]), p["proc_kb"], (0, 1, 1, 2)[p.get("fpu", 3)], p.get("clx", 3))
     if m.akiko:
         m.akiko.c2p_on = p["c2p"]
     m.blitter.mode = p.get("blit", 0)
     m.paula.filter_mode, m.paula.sep = p.get("snd_filter", 0), p.get("snd_sep", 100)
     m.paula.led = lambda: bool(m.ciaa.ddra & 2) and not m.ciaa.pra & 2
+    if board_fast:
+        z3 = fast_kb > 8192 and m.cpu.model >= 68030
+        kb = fast_kb if z3 else max(k for k in (64, 128, 256, 512, 1024, 2048, 4096, 8192) if k <= min(fast_kb, 8192))
+        m.add_board(RamBoard(kb, 3 if z3 else 2))
     if p["z2_kb"]:
         m.add_board(RamBoard(int(p["z2_kb"]), 2))
     if p["z3_kb"]:
@@ -188,6 +210,11 @@ def build_machine(profile: dict):  #vers 16
             raise ValueError("Picasso IV is Zorro III and needs a 68030 or better")
         from apps.hardware.picasso import PicassoIV
         m.add_board(PicassoIV(p.get("rtg_mb", 4), (lambda s: open("morosa_rtglog.txt", "a").write(s + "\n")) if os.environ.get("MOROSA_RTGLOG") else None))
+    if p.get("rtc") and p["preset"] == "A1200" and m.rtc is None:
+        m.add_rtc()
+    if p["ext_rom"]:
+        with open(p["ext_rom"], "rb") as f:
+            m.load_ext(f.read(), 0xF00000 if p["preset"] == "CDTV" else 0xE00000)
     if p["bootstrap"]:
         if p["preset"] != "A1000":
             raise ValueError("a boot ROM is only supported on the A1000")
@@ -206,10 +233,20 @@ def build_machine(profile: dict):  #vers 16
         if path:
             with open(path, "rb") as f:
                 m.insert_disk(f.read(), unit, not p["df_write"][unit], path)
+    if p["xfer"]:
+        if not os.path.isdir(p["xfer"]):
+            raise ValueError("Transfer folder not found: " + p["xfer"])
+        from apps.hardware.hostfs import HostFS
+        m.add_board(HostFS(p["xfer"], HD_SLOTS, -128, "Transfer", None, True, ""))
     for unit, path in enumerate(p["hd"]):
         if not path:
             continue
         scsi = unit > 1
+        if os.path.isdir(path):
+            from apps.hardware.hostfs import HostFS
+            pri = p["hd_pri"][unit]
+            m.add_board(HostFS(path, unit, pri if pri >= 0 else -128, "", None, bool(p["hdf_write"]), p["hd_ss"][unit]))
+            continue
         if m.akiko is not None or m.dmac is not None:
             from apps.hardware import cdimage
             if not os.path.isdir(path) and cdimage.is_cd_image(path):
@@ -229,17 +266,11 @@ def build_machine(profile: dict):  #vers 16
                 from apps.hardware.atapi import ATAPIDrive
                 m.attach_drive(ATAPIDrive(cd), unit)
             continue
-        if os.path.isdir(path):
-            from apps.methods import folder_disk
-            pri = p["hd_pri"][unit]
-            root = folder_disk.boot_root(path) if pri > -128 else path
-            image = folder_disk.build_image(root, f"DH{unit}", pri)
-        else:
-            f = open(path, "r+b" if p["hdf_write"] else "rb")
-            image = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_WRITE if p["hdf_write"] else mmap.ACCESS_COPY)
-            from apps.methods import hardfile
-            if not hardfile.has_rdb(image):
-                image = hardfile.HardfileImage(image, p["hf_heads"], p["hf_spt"], f"DH{unit}", 0, p["hd_pri"][unit])
+        f = open(path, "r+b" if p["hdf_write"] else "rb")
+        image = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_WRITE if p["hdf_write"] else mmap.ACCESS_COPY)
+        from apps.methods import hardfile
+        if not hardfile.has_rdb(image):
+            image = hardfile.HardfileImage(image, p["hf_heads"], p["hf_spt"], f"DH{unit}", 0, p["hd_pri"][unit])
         if scsi:
             from apps.hardware.scsi import SCSIDisk
             m.attach_scsi(unit - 2, SCSIDisk(image))

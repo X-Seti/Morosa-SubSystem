@@ -14,6 +14,8 @@ Morosa Blitter - Agnus blitter: area copy with minterms, shifts, masks and fill;
 # Blitter.start
 # Blitter.write
 
+from collections import deque
+
 from apps.core import video_ext
 
 REGS = {0x040: "con0", 0x042: "con1", 0x044: "afwm", 0x046: "alwm", 0x060: "cmod", 0x062: "bmod", 0x064: "amod",
@@ -38,6 +40,8 @@ class Blitter:
         self.zero = True
         self.sizv = 0
         self.mode, self.wait = 0, 0
+        self.log = deque(maxlen=64)
+        self.irq_due = False
 
     def write(self, off: int, v: int) -> bool:  #vers 1
         v &= 0xFFFF
@@ -74,7 +78,9 @@ class Blitter:
                 out |= (a if i & 4 else ~a) & (b if i & 2 else ~b) & (c if i & 1 else ~c)
         return out & 0xFFFF
 
-    def start(self, width: int, height: int) -> None:  #vers 2
+    def start(self, width: int, height: int) -> None:  #vers 4
+        self.log.append((self.con0, self.con1, self.afwm, self.alwm, self.apt, self.bpt, self.cpt, self.dpt,
+                         self.amod, self.bmod, self.cmod, self.dmod, width, height, self.busy))
         self.busy = True
         self.zero = True
         if self.con1 & 1:
@@ -86,10 +92,13 @@ class Blitter:
             self.wait = max(1, (height * 8) if self.con1 & 1 else width * height * (4 if n >= 3 else 2))
             return
         self.busy = False
-        self.done()
+        self.irq_due = True
 
-    def tick(self, cclocks: int) -> None:  #vers 1
-        """Normal mode: busy and the interrupt follow the estimated blit time."""
+    def tick(self, cclocks: int) -> None:  #vers 2
+        """Normal mode: busy and the interrupt follow the estimated blit time; Immediate raises it next line."""
+        if self.irq_due:
+            self.irq_due = False
+            self.done()
         if self.wait:
             self.wait -= cclocks
             if self.wait <= 0:

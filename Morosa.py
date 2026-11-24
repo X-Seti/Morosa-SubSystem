@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-#this belongs in root /Morosa.py - Version: 2
+#this belongs in root /Morosa.py - Version: 3
 # X-Seti - November 17 2026 - Morosa - Launcher.
 
 """
@@ -16,5 +16,8 @@ if os.environ.get("XDG_SESSION_TYPE") == "wayland" and os.environ.get("DISPLAY")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from apps.gui.settings import main
+from apps.methods import crashlog
+
+crashlog.apply()
 
 raise SystemExit(main())

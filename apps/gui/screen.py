@@ -9,9 +9,12 @@ Morosa Screen - Qt window that runs a hardware Amiga: video, keyboard, mouse, au
 # KEYMAP
 # MachineScreen
 # MachineScreen._audio
+# MachineScreen._busy
 # MachineScreen._crop
+# MachineScreen._due
 # MachineScreen._frame
 # MachineScreen._pipewire
+# MachineScreen._pump
 # MachineScreen._target
 # MachineScreen._send
 # MachineScreen._paint_fps
@@ -32,6 +35,9 @@ Morosa Screen - Qt window that runs a hardware Amiga: video, keyboard, mouse, au
 # MachineScreen.set_status
 # MachineScreen.set_trim
 # MachineScreen.snapshot
+# MachineScreen.profile_start
+# MachineScreen._profile_end
+# MachineScreen.state_dump
 # MachineScreen.start
 # MachineScreen.stop
 # MachineScreen.toggle_vkeyboard
@@ -95,7 +101,7 @@ class MachineScreen(QWidget):
         if audio:
             self._audio()
 
-    def _audio(self) -> None:  #vers 2
+    def _audio(self) -> None:  #vers 3
         rate = self.m.paula.rate
         if self.snd_out == "pipewire":
             return self._pipewire(rate)
@@ -106,6 +112,7 @@ class MachineScreen(QWidget):
             fmt.setChannelCount(2)
             fmt.setSampleFormat(QAudioFormat.SampleFormat.Int16)
             self.sink = QAudioSink(QMediaDevices.defaultAudioOutput(), fmt, self)
+            self.sink.setBufferSize(rate * 4 * 15 // 100)
             self.out = self.sink.start()
         except ImportError:
             self.sink = self.out = None
@@ -121,6 +128,14 @@ class MachineScreen(QWidget):
         self.pw_fmt = "s32" if self.m.paula.maxfmt >= 2 else "s16"
         self.pw = subprocess.Popen([exe, "--playback", "--rate", str(rate), "--channels", "2", "--format", self.pw_fmt, "-"],
                                    stdin=subprocess.PIPE, stderr=subprocess.DEVNULL)
+
+    def _pump(self) -> None:  #vers 1
+        """Send the samples of the last frame to the audio output."""
+        s = self.m.paula.take_samples()
+        if (self.out is not None or self.pw is not None) and s:
+            self._send(s)
+        else:
+            self.m.paula.samples.clear()
 
     def _send(self, s: list) -> None:  #vers 1
         """Write mixed frames to PipeWire or the Qt sink."""
@@ -144,8 +159,8 @@ class MachineScreen(QWidget):
             self.vk = VKeyboard(self.m.keyboard, self)
         self.vk.setVisible(not self.vk.isVisible())
 
-    def start(self) -> None:  #vers 2
-        self.timer.start(20)
+    def start(self) -> None:  #vers 3
+        self.timer.start(10 if self.sink is not None else 20)
         if self.view.get("vkeyboard"):
             self.toggle_vkeyboard()
 
@@ -184,6 +199,47 @@ class MachineScreen(QWidget):
         name = f"snap{n:02d}.png"
         ok = self.img.copy(self._crop()).save(str(d / name))
         self.note, self.note_until = (f"Saved {name}" if ok else "Snapshot failed"), time.monotonic() + 2.0
+        self.update()
+
+    def profile_start(self) -> None:  #vers 1
+        """Shift+F10: profile 100 ticks, then save dumps/profNN.txt."""
+        import cProfile
+        if getattr(self, "_prof", None) is not None:
+            return
+        self._prof, self._pn, self._pt, self._pf = cProfile.Profile(), 0, time.monotonic(), self.fcount
+        self._prof.enable()
+        self.note, self.note_until = "Profiling 100 ticks", time.monotonic() + 2.0
+
+    def _profile_end(self) -> None:  #vers 1
+        """Stop the profile and write the busiest functions."""
+        import io
+        import pstats
+        self._prof.disable()
+        out = io.StringIO()
+        secs, frames = time.monotonic() - self._pt, self.fcount - self._pf
+        out.write(f"ticks {self._pn} frames {frames} seconds {secs:.2f} fps {frames / secs:.1f}\n")
+        for key in ("tottime", "cumulative"):
+            out.write(f"\nsorted by {key}\n")
+            pstats.Stats(self._prof, stream=out).sort_stats(key).print_stats(28)
+        from apps.methods import debugdump
+        d = config.ROOT / "dumps"
+        d.mkdir(exist_ok=True)
+        n = 1
+        while (d / f"prof{n:02d}.txt").exists():
+            n += 1
+        (d / f"prof{n:02d}.txt").write_text(out.getvalue(), encoding="utf-8")
+        self._prof = None
+        self.note, self.note_until = f"Saved prof{n:02d}", time.monotonic() + 2.0
+
+    def state_dump(self) -> None:  #vers 1
+        """Save the picture and display state as dumps/dumpNN.png and .txt."""
+        from apps.methods import debugdump
+        d = config.ROOT / "dumps"
+        stem = debugdump.next_name(d)
+        if self.img is not None:
+            self.img.save(str(d / f"{stem}.png"))
+        (d / f"{stem}.txt").write_text(debugdump.dump_text(self.m), encoding="utf-8")
+        self.note, self.note_until = f"Saved {stem}", time.monotonic() + 2.0
         self.update()
 
     def _paint_note(self, p) -> None:  #vers 1
@@ -226,9 +282,42 @@ class MachineScreen(QWidget):
             self.vk.close()
         super().closeEvent(e)
 
-    def _frame(self) -> None:  #vers 2
+    def _due(self) -> int:  #vers 1
+        """Frames to run now; the Qt audio buffer level sets the pace."""
+        if self.sink is None or self.out is None or not self.sink.bufferSize():
+            return 1
+        buf = self.sink.bufferSize() - self.sink.bytesFree()
+        want = self.m.paula.rate * 4 * 6 // 100
+        return 0 if buf >= want else min(3, -(-(want - buf) // (self.m.paula.rate * 4 // 50)))
+
+    def _busy(self) -> bool:  #vers 1
+        """True when the guest read the hard disk or host folders since the last check."""
+        now = (self.m.act_hd, self.m.act_hfs)
+        last, self._wlast = getattr(self, "_wlast", now), now
+        return now != last
+
+    def _frame(self) -> None:  #vers 5
+        n = self._due()
+        if not n:
+            return
+        t0 = time.monotonic()
+        for i in range(n - 1):
+            self.m.run_frame(True)
+            self.fcount += 1
+            self._pump()
+        if self._busy():
+            while time.monotonic() - t0 < 0.012:
+                self.m.run_frame(True)
+                self.fcount += 1
+                self.m.paula.samples.clear()
+                if not self._busy():
+                    break
         self.m.run_frame()
         self.fcount += 1
+        if getattr(self, "_prof", None) is not None:
+            self._pn += 1
+            if self._pn >= 100:
+                self._profile_end()
         now = time.monotonic()
         if now - self.ftime >= 1.0:
             self.fps, self.fcount, self.ftime = round(self.fcount / (now - self.ftime)), 0, now
@@ -239,11 +328,7 @@ class MachineScreen(QWidget):
         if self.trim:
             self.boxes = (self.boxes + [self.m.display_box()])[-25:]
         self.img = QImage(data, w, h, w * 4, QImage.Format.Format_RGB32).copy()
-        s = self.m.paula.take_samples()
-        if (self.out is not None or self.pw is not None) and s:
-            self._send(s)
-        else:
-            self.m.paula.samples.clear()
+        self._pump()
         n = self.view.get("scale", 0)
         if n and not (self.isMaximized() or self.isFullScreen()):
             c = self._crop()
@@ -354,9 +439,9 @@ class MachineScreen(QWidget):
         p.setPen(QColor(140, 255, 140))
         p.drawText(18, 14 + fm.ascent(), t)
 
-    def _paint_status(self, p) -> None:  #vers 2
+    def _paint_status(self, p) -> None:  #vers 3
         """CRT style on screen display, bottom right."""
-        names = ("FD", "HD", "CD", "RAM", "CPU")
+        names = ("FD", "HD", "CD", "RAM", "CPU") + (("HostFS",) if getattr(self.m, "hostfs", False) else ())
         f = QFont("monospace", 9, QFont.Weight.Bold)
         p.setFont(f)
         fm = QFontMetrics(f)
@@ -384,13 +469,15 @@ class MachineScreen(QWidget):
                 p.drawText(cx, y + 4 + fm.ascent(), " | ")
                 cx += gap
 
-    def keyPressEvent(self, e) -> None:  #vers 7
+    def keyPressEvent(self, e) -> None:  #vers 9
         mod = e.modifiers()
-        if e.key() in (Qt.Key.Key_Print, Qt.Key.Key_F11, Qt.Key.Key_F12, Qt.Key.Key_ScrollLock):
+        if e.key() in (Qt.Key.Key_Print, Qt.Key.Key_F10, Qt.Key.Key_F11, Qt.Key.Key_F12, Qt.Key.Key_ScrollLock):
             if e.isAutoRepeat():
                 return
             if e.key() == Qt.Key.Key_Print:
                 self.snapshot()
+            elif e.key() == Qt.Key.Key_F10:
+                self.profile_start() if mod & Qt.KeyboardModifier.ShiftModifier else self.state_dump()
             elif e.key() == Qt.Key.Key_ScrollLock:
                 self.toggle_vkeyboard()
             elif e.key() == Qt.Key.Key_F11:

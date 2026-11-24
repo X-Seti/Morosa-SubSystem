@@ -75,7 +75,99 @@ from apps.hardware.amiga import PRESETS
 from apps.methods import config
 from apps.methods.rom_scan import scan_roms
 
-CPUS = ["Preset", "68000", "68010", "68020", "68030", "68040", "68060"]
+CPUS = ["Preset", "68000", "68010", "68EC020", "68020", "68EC030", "68030", "68EC040", "68LC040", "68040", "68EC060", "68LC060", "68060"]
+A1000_PORTS = ("<b>A1000 connectors</b><br>Video: RGB (DB23), composite (RCA), TV modulator<br>Audio: left and right (RCA)<br>"
+               "Serial: RS-232 (DB25)<br>Parallel: Centronics (DB25)<br>External floppy: DB23<br>"
+               "Keyboard: RJ10 (4 pin)<br>Expansion: 86-pin side port<br>No internal hard disk or clock.")
+A500_PORTS = ("<b>A500 connectors</b><br>Video: RGB (DB23), monochrome (RCA)<br>Audio: left and right (RCA)<br>"
+              "Serial: RS-232 (DB25)<br>Parallel: Centronics (DB25)<br>External floppy: DB23<br>"
+              "Keyboard: built in<br>Expansion: 86-pin side port<br>Trapdoor: A501 RAM and clock")
+A500P_PORTS = ("<b>A500+ connectors</b><br>Video: RGB (DB23), monochrome (RCA)<br>Audio: left and right (RCA)<br>"
+               "Serial: RS-232 (DB25)<br>Parallel: Centronics (DB25)<br>External floppy: DB23<br>"
+               "Keyboard: built in<br>Expansion: 86-pin side port<br>Trapdoor: RAM expansion<br>Built-in battery clock")
+CDTV_PORTS = ("<b>CDTV connectors</b><br>Keyboard: 5-pin mini-DIN<br>Mouse: 4-pin mini-DIN<br>Serial: RS-232 (DB25)<br>"
+              "Parallel: Centronics (DB25)<br>External floppy: DB23<br>MIDI in and out<br>Video slot<br>"
+              "Expansion: 30-pin DMA slot, 80-pin diagnostic slot<br>Memory card slot (8 KB to 1 MB)<br>Built-in single-speed CD-ROM")
+A2000_PORTS = ("<b>A2000 connectors</b><br>Video: RGB (DB23), monochrome (RCA)<br>Audio: left and right (RCA)<br>"
+               "Serial: RS-232 (DB25)<br>Parallel: Centronics (DB25)<br>External floppy: DB23<br>"
+               "Keyboard: 5-pin DIN<br>Slots: 5 Zorro II, CPU slot (86-pin), video slot, ISA slots for a bridgeboard<br>"
+               "Bays: two 3.5 inch, one 5.25 inch<br>Built-in battery clock")
+A600_PORTS = ("<b>A600 connectors</b><br>Video: RGB (DB23), composite (RCA), RF (RCA)<br>Audio: left and right (RCA)<br>"
+              "Serial: RS-232 (DB25)<br>Parallel: Centronics (DB25)<br>External floppy: DB23<br>"
+              "Game ports: two (DE9)<br>Keyboard: built in, 78 keys<br>Expansion: 80-pin trapdoor slot, PCMCIA type II<br>"
+              "Internal: 2.5 inch IDE (44 pin)<br>No side expansion port")
+A3000_PORTS = ("<b>A3000 connectors</b><br>Video: RGB (DB23), VGA (DB15) with built-in scan doubler<br>Audio: left and right (RCA)<br>"
+               "Serial: RS-232 (DB25)<br>Parallel: Centronics (DB25)<br>External floppy: DB23<br>Game ports: two (DE9)<br>"
+               "Keyboard: 5-pin DIN<br>SCSI: external DB25, internal 50 pin<br>"
+               "Slots: 4 Zorro III, video slot, 2 ISA (bridgeboard), CPU slot (200 pin)<br>Motherboard RAM sockets (DIP and ZIP)<br>Built-in battery clock")
+A1200_PORTS = ("<b>A1200 connectors</b><br>Video: RGB (DB23), composite (RCA), RF (RCA)<br>Audio: left and right (RCA)<br>"
+               "Serial: RS-232 (DB25)<br>Parallel: Centronics (DB25)<br>External floppy: DB23<br>Game ports: two (DE9)<br>"
+               "Keyboard: built in, 96 keys<br>Expansion: 150-pin trapdoor, PCMCIA type II, 22-pin clock port<br>"
+               "Internal: 2.5 inch IDE (44 pin)")
+CD32_PORTS = ("<b>CD32 connectors</b><br>Video: RF (RCA), composite (RCA), S-Video (mini-DIN)<br>Audio: left and right (RCA), headphone jack<br>"
+              "Controller ports: two (DE9), on the left side<br>AUX: RS-232 (6-pin mini-DIN) for a keyboard<br>"
+              "Expansion: 182-pin socket for the FMV cartridge, SX-1, SX-32<br>Built-in double-speed CD-ROM, 1 KB EEPROM for saves<br>"
+              "No floppy drive, no internal IDE")
+CD32_CARTS = {
+    "None": {"cpus": ("Preset",), "ram": False, "floppy": False},
+    "FMV module (MPEG, not emulated)": {"cpus": ("Preset",), "ram": False, "floppy": False},
+    "SX-1": {"cpus": ("Preset",), "ram": True, "floppy": True},
+    "SX-32": {"cpus": ("Preset", "68EC030", "68030"), "ram": True, "floppy": True},
+    "TF328/TF330/TF360": {"cpus": ("Preset", "68EC030", "68030", "68EC060", "68LC060", "68060"), "ram": True, "floppy": False},
+}
+A4000_PORTS = ("<b>A4000 connectors</b><br>Video: RGB (DB23)<br>Audio: left and right (RCA)<br>Serial: RS-232 (DB25)<br>"
+               "Parallel: Centronics (DB25)<br>External floppy: DB23<br>Game ports: two (DE9)<br>Keyboard: 6-pin mini-DIN<br>"
+               "Internal: 3.5 inch IDE (40 pin)<br>Slots: 4 Zorro III, video slot, 3 ISA (bridgeboard), CPU slot (200 pin)<br>"
+               "Bays: two front 3.5 inch, one front 5.25 inch, two internal 3.5 inch<br>Battery clock")
+A4000T_PORTS = ("<b>A4000T connectors</b><br>Internal: SCSI (50 pin, Fast SCSI-2) and IDE (40 pin), the only Amiga with both<br>"
+                "Slots: 5 Zorro III, 4 ISA, 2 video slots<br>Bays: five front 5.25 inch, one internal 5.25 inch<br>"
+                "Floppy: 3.5 inch high density<br>Battery clock (lithium)")
+# per model: cpus, chip KB, hidden controls, expansion name, slow RAM name, ports text, hard drive page
+MODEL_RULES = {
+    "A1000": {"cpus": ("Preset", "68000"), "chips": (0, 256, 512), "hide": ("slow", "z3", "proc", "rtg", "c2p", "addr24", "fpu"),
+              "rom": "Kickstart 1.2 or 1.3, loaded from floppy with the boot ROM", "exp": "Expansion port", "slow": "Slow RAM", "ports": A1000_PORTS, "hd": False, "lock": ("chipset",),
+              "tip": "A1000: 256 KB on board, 512 KB with the front RAM module."},
+    "A500+": {"cpus": ("Preset", "68000", "68010"), "chips": (0, 512, 1024), "hide": ("z3", "proc", "rtg", "c2p", "addr24", "fpu"),
+              "rom": "Kickstart 2.04 (v37.175)", "exp": "Side expansion port", "slow": "Trapdoor RAM", "ports": A500P_PORTS, "hd": True, "lock": ("chipset",),
+              "tip": "A500+: 1 MB Chip RAM, ECS. Very early units had 512 KB."},
+    "CDTV": {"cpus": ("Preset", "68000"), "chips": (0, 1024), "hide": ("slow", "z3", "proc", "rtg", "c2p", "addr24", "fpu"),
+             "rom": "Kickstart 1.3 with the 256 KB CDTV extended ROM", "exp": "Expansion slot", "slow": "Slow RAM", "ports": CDTV_PORTS, "hd": True,
+             "tip": "CDTV: 1 MB Chip RAM."},
+    "A2000": {"cpus": ("Preset", "68000", "68010", "68EC020", "68020", "68030"), "chips": (0, 512, 1024, 2048), "hide": ("z3", "rtg", "c2p", "addr24"),
+              "hd_units": range(2, 9), "rom": "Kickstart 1.2 or 1.3 (2.0 on later revisions)", "exp": "Zorro II slots", "slow": "Slow RAM (on board)", "ports": A2000_PORTS, "hd": True,
+              "tip": "A2000: 512 KB to 1 MB Chip RAM, 2 MB with a later Agnus."},
+    "A600": {"cpus": ("Preset", "68000", "68010"), "chips": (0, 1024, 2048), "hide": ("z3", "proc", "rtg", "c2p", "addr24", "fpu"), "lock": ("chipset",),
+             "hd_units": range(0, 2), "rom": "Kickstart 2.05 (37.299, 37.300 or 37.350)", "exp": "Trapdoor and PCMCIA", "slow": "Trapdoor RAM", "ports": A600_PORTS, "hd": True,
+             "tip": "A600: 1 MB Chip RAM, 2 MB with the trapdoor RAM as chip."},
+    "A3000": {"cpus": ("Preset", "68030", "68040", "68060"), "chips": (0, 2048), "hide": ("slow", "c2p", "addr24"), "lock": ("chipset",), "fast": "Motherboard Fast RAM",
+              "hd_units": range(2, 9), "rom": "512 KB Kickstart ROM, or SuperKickstart loaded from disk", "exp": "Zorro III slots", "slow": "Slow RAM", "ports": A3000_PORTS, "hd": True,
+              "tip": "A3000: ECS, 2 MB Chip RAM."},
+    "A1200": {"cpus": ("Preset", "68EC020", "68020", "68EC030", "68030", "68EC040", "68LC040", "68040", "68EC060", "68LC060", "68060"), "chips": (0, 2048),
+              "hide": ("slow", "z3", "rtg", "c2p"), "lock": ("chipset",), "fast": "Trapdoor RAM", "hd_units": range(0, 2),
+              "rom": "Kickstart 3.0 (early units) or 3.1", "exp": "Trapdoor and PCMCIA", "slow": "Slow RAM", "ports": A1200_PORTS, "hd": True,
+              "tip": "A1200: AGA, 2 MB Chip RAM."},
+    "CD32": {"cpus": ("Preset", "68EC020", "68EC030", "68030", "68EC060", "68LC060", "68060"), "chips": (0, 2048), "hide": ("slow", "z3", "rtg"), "lock": ("chipset",),
+             "fast": "Expansion RAM", "hd_units": range(0, 2),
+             "rom": "1 MB Kickstart 3.1 with CD32 firmware (or 512 KB Kickstart plus the extended ROM)", "exp": "Expansion socket", "slow": "Slow RAM", "ports": CD32_PORTS, "hd": True,
+             "tip": "CD32: AGA, 2 MB Chip RAM."},
+    "A4000": {"cpus": ("Preset", "68EC030", "68030", "68040", "68060"), "chips": (0, 2048), "hide": ("slow", "c2p", "addr24"), "lock": ("chipset",),
+              "fast": "Motherboard Fast RAM", "hd_units": range(0, 2), "rom": "Kickstart 3.0 (512 KB), upgradable to 3.1", "exp": "Zorro III slots",
+              "slow": "Slow RAM", "ports": A4000_PORTS, "hd": True, "tip": "A4000: AGA, 2 MB Chip RAM."},
+    "A4000T": {"cpus": ("Preset", "68040", "68060"), "chips": (0, 2048), "hide": ("slow", "c2p", "addr24"), "lock": ("chipset",),
+               "fast": "Motherboard Fast RAM", "hd_units": range(0, 9), "rom": "Kickstart 3.1", "exp": "Zorro III slots",
+               "slow": "Slow RAM", "ports": A4000T_PORTS, "hd": True, "tip": "A4000T: AGA, 2 MB Chip RAM."},
+    "A500": {"cpus": ("Preset", "68000", "68010"), "chips": (0, 512, 1024), "hide": ("z3", "proc", "rtg", "c2p", "addr24", "fpu"),
+             "rom": "Kickstart 1.2 or 1.3", "exp": "Side expansion port", "slow": "Trapdoor RAM (A501)", "ports": A500_PORTS, "hd": True,
+             "tip": "A500: 512 KB, 1 MB with a Fat Agnus."},
+}
+DEFAULT_CPU = {"A1200": "68EC020", "CD32": "68EC020"}
+FIXED_CHIP = ("A3000", "A1200", "A4000", "A4000D", "A4000T", "CD32")
+CPU_VARIANT = {"68EC020": (True, None), "68EC030": (False, None), "68EC040": (False, 0), "68LC040": (False, 0), "68EC060": (False, 0), "68LC060": (False, 0)}  # 24-bit, fpu
+
+
+def cpu_number(name: str) -> int:  #vers 1
+    """CPU model number from a name such as 68EC020."""
+    return int(name.replace("EC", "").replace("LC", ""))
 JOY_ACTIONS = (("up", "Joystick up"), ("down", "Joystick down"), ("left", "Joystick left"), ("right", "Joystick right"),
                ("fire", "Fire"), ("fire2", "Second fire"))
 
@@ -120,6 +212,7 @@ class SettingsWindow(QMainWindow):
         self.preset.addItems(list(PRESETS))
         self.cpu = QComboBox()
         self.cpu.addItems(CPUS)
+        self.cpu.currentTextChanged.connect(self._cpu_variant)
         self.fast = QSpinBox()
         self.fast.setRange(0, 1024)
         self.fast.setSuffix(" MB")
@@ -184,8 +277,10 @@ class SettingsWindow(QMainWindow):
         self.hf_heads, self.hf_spt = QSpinBox(), QSpinBox()
         self.hf_heads.setRange(1, 16)
         self.hf_spt.setRange(1, 255)
-        self.hdf_write = QCheckBox("Allow writes to hard disk image files")
+        self.hdf_write = QCheckBox("Allow writes to hard drives (images and folders)")
         self.rom = QLineEdit()
+        self.ext_rom = QLineEdit()
+        self.xfer = QLineEdit()
         self.bootstrap = QLineEdit()
         self.bootstrap.setPlaceholderText("A1000 only; Kickstart ROM below is loaded from a built disk")
         self.rom_info = QLabel("")
@@ -196,10 +291,12 @@ class SettingsWindow(QMainWindow):
             c.setChecked(True)
             c.setToolTip("Untick to let the Amiga write back to the ADF file")
         self.hd = [QLineEdit() for _ in range(config.HD_SLOTS)]
+        self.hd_ss = [QLineEdit() for _ in range(config.HD_SLOTS)]
         self.hd_pri = [QSpinBox() for _ in range(config.HD_SLOTS)]
         for sp in self.hd_pri:
             sp.setRange(-128, 127)
             sp.setPrefix("Boot Pri ")
+            sp.setButtonSymbols(QSpinBox.ButtonSymbols.NoButtons)
             sp.setFixedWidth(80)
         self.amisys = QLineEdit(config.amisys_dir())
         self.roms = QLineEdit(config.roms_dir())
@@ -213,7 +310,7 @@ class SettingsWindow(QMainWindow):
                               ("Chipset", "chip", self._page_chipset()), ("ROM", "rom", self._tab_rom()), ("RAM", "ram", self._page_ram()),
                               ("Floppy drives", "floppy", self._tab_floppy()), ("Hard drives/CD", "drive", self._tab_drives()),
                               ("Expansions", "slot", self._page_expansions()),
-                              ("Hardware info", "info", self._page_hwinfo()), ("Display", "display", self._page_display()),
+                              ("Display", "display", self._page_display()),
                               ("Sound", "sound", self._page_sound()), ("Input", "input", self._tab_keys()),
                               ("IO Ports", "ports", self._page_ports()), ("Miscellaneous", "misc", self._page_misc()),
                               ("Savestates", "card", stub_page((("Slots", (("radio", "Slot 0"), ("radio", "Slot 1"))),))),
@@ -223,8 +320,14 @@ class SettingsWindow(QMainWindow):
             it.setData(Qt.ItemDataRole.UserRole, name)
             it.setToolTip(name)
             self.nav.addItem(it)
+        self._model_labels(self.preset.currentText())
         self.nav.currentRowChanged.connect(self.pages.setCurrentIndex)
-        self.nav.currentRowChanged.connect(lambda _r: self._hw_refresh())
+        for sig in (self.preset.currentTextChanged, self.cpu.currentIndexChanged, self.chip.currentIndexChanged, self.chipset.currentIndexChanged,
+                    self.fast.valueChanged, self.slow.currentIndexChanged, self.z2.currentIndexChanged, self.z3.currentIndexChanged,
+                    self.proc.currentIndexChanged, self.addr24.toggled, self.speed.currentIndexChanged, self.pal.currentIndexChanged,
+                    self.cart.currentIndexChanged):
+            sig.connect(lambda *_a: self._hw_refresh())
+        self._hw_refresh()
         self.nav.setCurrentRow(0)
         right = QVBoxLayout()
         right.addWidget(self.pages)
@@ -308,9 +411,8 @@ class SettingsWindow(QMainWindow):
         grid = QGridLayout(w)
         cg = QGroupBox("Chipset")
         cl = QFormLayout(cg)
-        self.chipset.setToolTip("Preset: model default. AGA models keep AGA")
-        cl.addRow("Chipset", self.chipset)
-        cl.addRow("", QLabel("AGA follows the Model"))
+        self.chipset.setToolTip("Model default, or swap the chips on models that allowed it")
+        cl.addRow(self.chipset)
         grid.addWidget(cg, 0, 0)
         bg = QGroupBox("Blitter")
         bl = QVBoxLayout(bg)
@@ -341,9 +443,10 @@ class SettingsWindow(QMainWindow):
         form.addRow("Slow RAM", self.slow)
         form.addRow("Fast RAM", self.fast)
         form.addRow("Zorro RAM boards", self.boards)
+        self.ram_form = form
         grid.addWidget(mg, 0, 0)
         og = QGroupBox("Expansion memory")
-        ol = QFormLayout(og)
+        ol = self.ram_exp_form = QFormLayout(og)
         ol.addRow("Z2 Fast", self.z2)
         ol.addRow("Z3 Fast", self.z3)
         ol.addRow("Processor slot Fast", self.proc)
@@ -407,7 +510,11 @@ class SettingsWindow(QMainWindow):
         pl.addRow("Port 2", self.port1)
         grid.addWidget(pg, 0, 0)
         grid.addWidget(stub_group("Parallel and serial", (("combo", "Parallel", ["None"]), ("combo", "Serial", ["None"]), ("check", "USB devices"))), 0, 1)
-        grid.setRowStretch(1, 1)
+        self.port_info = QLabel()
+        self.port_info.setTextFormat(Qt.TextFormat.RichText)
+        self.port_info.setWordWrap(True)
+        grid.addWidget(self.port_info, 1, 0, 1, 2)
+        grid.setRowStretch(2, 1)
         return w
 
     def _page_vkbd(self) -> QWidget:  #vers 1
@@ -421,6 +528,12 @@ class SettingsWindow(QMainWindow):
         lo.addStretch(1)
         return w
 
+    def _crash_log(self, on: bool) -> None:  #vers 1
+        """Save the crash.log option and apply it now."""
+        from apps.methods import crashlog
+        config.set_crash_log(on)
+        crashlog.apply()
+
     def _page_misc(self) -> QWidget:  #vers 2
         w = QWidget()
         grid = QGridLayout(w)
@@ -428,6 +541,11 @@ class SettingsWindow(QMainWindow):
         ol = QVBoxLayout(og)
         ol.addWidget(self.pause_unfocus)
         ol.addWidget(self.rctrl)
+        self.crash = QCheckBox("Write crash.log when Morosa crashes")
+        self.crash.setToolTip("crash.log is saved in the Morosa folder.")
+        self.crash.setChecked(config.crash_log())
+        self.crash.toggled.connect(self._crash_log)
+        ol.addWidget(self.crash)
         ol.addWidget(stub_group("", (("check", "Show GUI on startup"),)))
         grid.addWidget(og, 0, 0)
         grid.addWidget(stub_group("Priority", (("combo", "Running", ["Normal", "High"]), ("combo", "Paused", ["Normal", "Low"]))), 0, 1)
@@ -443,25 +561,32 @@ class SettingsWindow(QMainWindow):
         self.exp_info.setTextFormat(Qt.TextFormat.RichText)
         gl.addWidget(self.exp_info)
         lo.addWidget(g)
-        zg = QGroupBox("Zorro cards")
+        zg = self.zorro_box = QGroupBox("Zorro cards")
         zl = QFormLayout(zg)
         self.rtg.setToolTip("Zorro III graphics board with 4 MB; needs a 68030 or better and a Picasso96 driver in the guest")
         zl.addRow(self.rtg)
         zl.addRow(stub_group("", (("check", "Ethernet"),)))
         lo.addWidget(zg)
+        self.cart_box = QGroupBox("CD32 cartridge")
+        cl = QFormLayout(self.cart_box)
+        self.cart = QComboBox()
+        self.cart.addItems(list(CD32_CARTS))
+        self.cart.setToolTip("Expansion socket: SX-1 and SX-32 add floppy, IDE, keyboard and RAM; SX-32 and TF add a faster CPU.")
+        self.cart.currentTextChanged.connect(lambda _t: self._model_labels(self.preset.currentText()))
+        cl.addRow("Cartridge", self.cart)
+        lo.addWidget(self.cart_box)
+        self.rtc = QCheckBox("Clock module (trapdoor)")
+        self.rtc.setToolTip("Battery clock on the trapdoor connector; the stock A1200 has none.")
+        lo.addWidget(self.rtc)
         lo.addStretch(1)
         return w
 
-    def _page_hwinfo(self) -> QWidget:  #vers 1
-        w = QWidget()
-        lo = QVBoxLayout(w)
+    def _page_hwinfo(self) -> QWidget:  #vers 2
         g = QGroupBox("This configuration")
         gl = QVBoxLayout(g)
         self.hwinfo.setTextFormat(Qt.TextFormat.RichText)
         gl.addWidget(self.hwinfo)
-        lo.addWidget(g)
-        lo.addStretch(1)
-        return w
+        return g
 
     def _hw_refresh(self) -> None:  #vers 1
         """Read-only summary of the settings in the form."""
@@ -469,7 +594,7 @@ class SettingsWindow(QMainWindow):
         chip = PRESETS[model][2] if model in PRESETS else 0
         chip = (0, 256, 512, 1024, 2048)[self.chip.currentIndex()] or chip
         chipset = ("preset", "OCS", "ECS")[self.chipset.currentIndex()]
-        rows = (("Model", model), ("CPU", (str(PRESETS[model][0]) if self.cpu.currentIndex() == 0 and model in PRESETS else self.cpu.currentText()) + (", 24-bit" if self.addr24.isChecked() else "") + f", {self.speed.currentText()}"),
+        rows = (("Model", model), ("CPU", (str(DEFAULT_CPU.get(model, PRESETS[model][0])) if self.cpu.currentIndex() == 0 and model in PRESETS else self.cpu.currentText()) + (", 24-bit" if self.addr24.isChecked() else "") + f", {self.speed.currentText()}"),
                 ("Chipset", chipset if chipset != "preset" else PRESETS.get(model, (0, "", 0))[1].upper()), ("Video", self.pal.currentText()),
                 ("Chip RAM", f"{chip} KB"), ("Slow RAM", self.slow.currentText()), ("Fast RAM", f"{self.fast.value()} MB"),
                 ("Kickstart", os.path.basename(self.rom.text()) or "none"),
@@ -502,9 +627,12 @@ class SettingsWindow(QMainWindow):
         self.app_dlg.raise_()
         self.app_dlg.activateWindow()
 
-    def _tab_machine(self) -> QWidget:  #vers 6
+    def _tab_machine(self) -> QWidget:  #vers 7
         w = QWidget()
-        form = QFormLayout(w)
+        outer = QVBoxLayout(w)
+        top = QWidget()
+        form = QFormLayout(top)
+        form.setContentsMargins(0, 0, 0, 0)
         form.addRow("Model", self.preset)
         form.addRow("Video", self.pal)
         self.qconf = QComboBox()
@@ -529,16 +657,103 @@ class SettingsWindow(QMainWindow):
             form.addRow(f"DF{i}", row)
             self.qdf.append(e)
         self._quick_models(self.preset.currentText())
+        outer.addWidget(top)
+        outer.addWidget(self._page_hwinfo())
+        outer.addStretch(1)
         return w
 
-    def _quick_models(self, model: str) -> None:  #vers 1
-        """Fill the Config list for the chosen model."""
+    def _model_labels(self, model: str) -> None:  #vers 5
+        """Show only what the chosen model had; see MODEL_RULES."""
+        r = MODEL_RULES.get({"A4000D": "A4000"}.get(model, model))
+        if hasattr(self, "rtc") and hasattr(self, "nav") and self.nav.count() >= 12:
+            self.rtc.setVisible(model == "A1200")
+        if model == "CD32" and hasattr(self, "cart"):
+            r = {**r, **CD32_CARTS[self.cart.currentText()]}
+        if model in PRESETS:
+            self.cpu.setItemText(0, f"{DEFAULT_CPU.get(model, PRESETS[model][0])} (model default)")
+        exp = r["exp"] if r else "Expansions"
+        if hasattr(self, "ram_form"):
+            self.ram_form.labelForField(self.fast).setText(r.get("fast", f"{exp} RAM") if r else "Fast RAM")
+            self.ram_form.labelForField(self.boards).setText(f"{exp} boards" if r else "Zorro RAM boards")
+            self.ram_form.labelForField(self.slow).setText(r["slow"] if r else "Slow RAM")
+            self.ram_form.setRowVisible(self.slow, not r or "slow" not in r["hide"])
+            self.ram_form.setRowVisible(self.fast, not r or r.get("ram", True))
+            self.ram_exp_form.setRowVisible(self.z3, not r or "z3" not in r["hide"])
+            self.ram_exp_form.setRowVisible(self.proc, not r or "proc" not in r["hide"])
+        if hasattr(self, "zorro_box"):
+            self.zorro_box.setTitle(f"{exp} cards" if r else "Zorro cards")
+        if hasattr(self, "nav"):
+            for i in range(self.nav.count()):
+                key = self.nav.item(i).data(Qt.ItemDataRole.UserRole)
+                if key == "Expansions":
+                    self.nav.item(i).setToolTip(exp)
+                    if self.nav.item(i).text():
+                        self.nav.item(i).setText(exp)
+                elif key == "Hard drives/CD":
+                    self.nav.item(i).setHidden(bool(r) and not r["hd"])
+                elif key == "Floppy drives":
+                    self.nav.item(i).setHidden(bool(r) and not r.get("floppy", True))
+        if hasattr(self, "port_info"):
+            self.port_info.setText(r["ports"] if r else "")
+        if hasattr(self, "hd_rows") and hasattr(self, "nav") and self.nav.count() >= 12:
+            units = r.get("hd_units", range(len(self.hd_rows))) if r else range(len(self.hd_rows))
+            for i, row in enumerate(self.hd_rows):
+                for w in row:
+                    w.setVisible(i in units)
+        if hasattr(self, "cart_box") and hasattr(self, "nav") and self.nav.count() >= 12:
+            self.cart_box.setVisible(model == "CD32")
+        if hasattr(self, "rom_form"):
+            self.rom_form.setRowVisible(self.ext_rom_row, model in ("CDTV", "CD32"))
+        if hasattr(self, "rom_hint"):
+            self.rom_hint.setText(f"Original ROM: {r['rom']}. Newer Kickstart ROMs also work." if r and "rom" in r else "")
+        if hasattr(self, "nav") and self.nav.count() >= 12:
+            for key, w in (("rtg", self.rtg), ("c2p", self.c2p), ("addr24", self.addr24)) + tuple(("fpu", f) for f in self.fpu):
+                w.setVisible(not r or key not in r["hide"])
+        if model in PRESETS:
+            base = PRESETS[model][1].upper()
+            self.chipset.setItemText(0, f"{base} (model default)")
+            locked = bool(r) and "chipset" in r.get("lock", ())
+            for i, name in enumerate(("", "OCS", "ECS")):
+                self.chipset.model().item(i).setEnabled(i == 0 or (not locked and base != "AGA" and name != base))
+            if not self.chipset.model().item(self.chipset.currentIndex()).isEnabled():
+                self.chipset.setCurrentIndex(0)
+            self.chipset.setEnabled(any(self.chipset.model().item(i).isEnabled() for i in (1, 2)))
+        for i, name in enumerate(CPUS):
+            self.cpu.model().item(i).setEnabled(not r or name in r["cpus"])
+        if r and self.cpu.currentIndex() > 0 and self.cpu.currentText() not in r["cpus"]:
+            self.cpu.setCurrentIndex(0)
+        for i, kb in enumerate((0, 256, 512, 1024, 2048)):
+            self.chip.model().item(i).setEnabled(not r or kb in r["chips"])
+        if r and (0, 256, 512, 1024, 2048)[self.chip.currentIndex()] not in r["chips"]:
+            self.chip.setCurrentIndex(0)
+
+    def _quick_models(self, model: str) -> None:  #vers 2
+        """Fill the Config list for the chosen model; fixed chip RAM models lock it."""
         if model not in PRESETS:
             return
+        fixed = model in FIXED_CHIP
+        if fixed:
+            self.chip.setCurrentIndex(0)
+        self.chip.setEnabled(not fixed)
+        self._model_labels(model)
+        self.chip.setToolTip(f"{model} has 2 MB Chip RAM. More RAM comes from the trapdoor or board slots (Fast RAM)." if fixed else MODEL_RULES.get(model, {}).get("tip", ""))
         self.qconf.clear()
         self.qconf.addItem("Custom", None)
         for label, cpu, fast in quick_configs(model, PRESETS[model][2]):
             self.qconf.addItem(label, (cpu, fast))
+
+    def _cpu_variant(self, name: str) -> None:  #vers 3
+        """EC and LC types set 24-bit and FPU; leaving one resets both."""
+        name = name.split()[0] if name else name
+        was, self._cpu_prev = getattr(self, "_cpu_prev", ""), name
+        if name in CPU_VARIANT:
+            a24, fpu = CPU_VARIANT[name]
+            self.addr24.setChecked(a24)
+            if fpu is not None:
+                self.fpu[fpu].setChecked(True)
+        elif was in CPU_VARIANT:
+            self.addr24.setChecked(False)
+            self.fpu[3].setChecked(True)
 
     def _quick_apply(self, idx: int) -> None:  #vers 1
         """Apply the chosen Config: CPU and Fast RAM."""
@@ -553,7 +768,13 @@ class SettingsWindow(QMainWindow):
         form = QFormLayout()
         form.addRow("Boot ROM (A1000)", self._pick(self.bootstrap, "ROM (*.rom *.bin *)"))
         form.addRow("Kickstart ROM", self._pick(self.rom, "ROM (*.rom *.bin *)"))
+        self.ext_rom_row = self._pick(self.ext_rom, "ROM (*.rom *.bin *)")
+        form.addRow("Extended ROM", self.ext_rom_row)
+        self.rom_form = form
         form.addRow("", self.rom_info)
+        self.rom_hint = QLabel()
+        self.rom_hint.setWordWrap(True)
+        form.addRow("", self.rom_hint)
         lo.addLayout(form)
         bar = QHBoxLayout()
         self.rom_count = QLabel("")
@@ -670,18 +891,36 @@ class SettingsWindow(QMainWindow):
         lo = QVBoxLayout(w)
         grid = QGridLayout()
         grid.setVerticalSpacing(2)
-        for c, t in ((0, "Slot"), (1, "Path"), (2, "Boot Pri")):
+        for c, t in ((0, "Slot"), (1, "Path"), (2, "Boot Pri"), (4, "Startup-Sequence (folders)")):
             grid.addWidget(QLabel(t), 0, c)
+        self.hd_rows = []
         for i, e in enumerate(self.hd):
             tag = "IDE" if i < 2 else "SCSI"
             e.setPlaceholderText("HDF, folder, or CD image (iso, cue, bin)")
-            self.hd_pri[i].setToolTip("0 and up boots, -128 does not. Folders and plain HDF files; HDF with RDB keep their own.")
+            self.hd_pri[i].setToolTip("Boot priority: below 0 does not boot, 0 and up boots. Folders and plain HDF files; HDF with RDB keep their own.")
             self.hd_pri[i].setPrefix("")
-            grid.addWidget(QLabel(f"{tag} {i}"), i + 1, 0)
-            grid.addWidget(self._pick(e, "HDF (*.hdf *.HDF *)", True, None, True), i + 1, 1)
+            self.hd_pri[i].setFixedWidth(50)
+            name, pick = QLabel(f"{tag} {i}"), self._pick(e, "HDF (*.hdf *.HDF *)", True, None, True)
+            grid.addWidget(name, i + 1, 0)
+            grid.addWidget(pick, i + 1, 1)
             grid.addWidget(self.hd_pri[i], i + 1, 2)
+            self.hd_ss[i].setPlaceholderText("Default: S/Startup-Sequence in the folder")
+            self.hd_ss[i].setToolTip("Script shown to the Amiga as S:Startup-Sequence; the folder is not changed. Full path, or relative to the folder.")
+            ss = self._pick(self.hd_ss[i], "All files (*)", False, None, False)
+            grid.addWidget(ss, i + 1, 4)
+            ic = QLabel()
+            ic.setFixedSize(24, 24)
+            grid.addWidget(ic, i + 1, 3)
+            self.hd_rows.append((name, pick, self.hd_pri[i], ic, ss))
+            self.hd_pri[i].valueChanged.connect(lambda v, l=ic: self._boot_icon(l, v))
+            self._boot_icon(ic, self.hd_pri[i].value())
         grid.setColumnStretch(1, 1)
         lo.addLayout(grid)
+        xf = QFormLayout()
+        self.xfer.setPlaceholderText("Host folder shared with the Amiga as Transfer:")
+        self.xfer.setToolTip("Always writable, never boots. Copy files in and out of the Amiga, for example ~/Downloads.")
+        xf.addRow("Transfer folder", self._pick(self.xfer, None, False, None, False))
+        lo.addLayout(xf)
         bar = QHBoxLayout()
         mk = QPushButton("Create hardfile")
         mk.clicked.connect(lambda _=False: self._create_hdf())
@@ -696,7 +935,7 @@ class SettingsWindow(QMainWindow):
         turbo.setEnabled(False)
         opt.addRow("", turbo)
         lo.addLayout(opt)
-        lbl = QLabel("Folders become a bootable disk, not saved back. Images without an RDB get a virtual one. SCSI slots (2-8) work on the A3000.")
+        lbl = QLabel("Folders mount live (Zorro II host filesystem); protection and comments are kept outside the folder. Images without an RDB get a virtual one. SCSI slots (2-8) work on the A3000.")
         lbl.setWordWrap(True)
         lo.addWidget(lbl)
         lo.addStretch(1)
@@ -733,6 +972,8 @@ class SettingsWindow(QMainWindow):
            "clone": '<path d="M8 8h12v12H8z M16 8V4H4v12h4" fill="none" stroke="{c}" stroke-width="2" stroke-linejoin="round"/>',
            "add": '<path d="M12 5v14M5 12h14" fill="none" stroke="{c}" stroke-width="2.5" stroke-linecap="round"/>',
            "del": '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6" fill="none" stroke="{c}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
+           "boot": '<path d="M12 3v8M7.5 6.5a7 7 0 1 0 9 0" fill="none" stroke="#3cb371" stroke-width="2.2" stroke-linecap="round"/>',
+           "noboot": '<path d="M12 3v8M7.5 6.5a7 7 0 1 0 9 0" fill="none" stroke="#888" stroke-width="2.2" stroke-linecap="round"/><path d="M4 4l16 16" stroke="#d9534f" stroke-width="2.2" stroke-linecap="round"/>',
            "import": '<path d="M12 3v12M7 10l5 5 5-5M4 20h16" fill="none" stroke="{c}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>',
            "export": '<path d="M12 15V3M7 8l5-5 5 5M4 20h16" fill="none" stroke="{c}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>'}
 
@@ -746,6 +987,11 @@ class SettingsWindow(QMainWindow):
         r.render(p)
         p.end()
         return QIcon(pm)
+
+    def _boot_icon(self, lab, v: int) -> None:  #vers 1
+        """Power icon: green boots, slashed grey does not."""
+        lab.setPixmap(self._icon("boot" if v >= 0 else "noboot").pixmap(24, 24))
+        lab.setToolTip("Boots" if v >= 0 else "No boot")
 
     def _info(self, edit) -> None:  #vers 1
         """Scan the chosen hard disk image and show what it is."""
@@ -807,12 +1053,12 @@ class SettingsWindow(QMainWindow):
             self.list.setCurrentRow(names.index(select) if select in names else 0)
             self._fill(self.list.currentItem().text())
 
-    def _fill(self, name: str) -> None:  #vers 18
+    def _fill(self, name: str) -> None:  #vers 19
         p = self.profiles.get(name)
         if not p:
             return
         self.preset.setCurrentText(p["preset"])
-        self.cpu.setCurrentIndex(0 if not p["cpu"] else CPUS.index(str(p["cpu"])))
+        self.cpu.setCurrentIndex(0 if not p["cpu"] else CPUS.index(p["cpu_name"] if p.get("cpu_name") in CPUS and cpu_number(p["cpu_name"]) == p["cpu"] else str(p["cpu"])))
         self.fast.setValue(p["fast_mb"])
         self.addr24.setChecked(p.get("addr24", False))
         self.fpu[min(3, max(0, p.get("fpu", 3)))].setChecked(True)
@@ -858,6 +1104,10 @@ class SettingsWindow(QMainWindow):
         self.hf_heads.setValue(p["hf_heads"])
         self.hf_spt.setValue(p["hf_spt"])
         self.rom.setText(p["rom"])
+        self.ext_rom.setText(p.get("ext_rom", ""))
+        self.xfer.setText(p.get("xfer", ""))
+        self.rtc.setChecked(bool(p.get("rtc")))
+        self.cart.setCurrentText(p.get("cart", "None") if p.get("cart", "None") in CD32_CARTS else "None")
         self.bootstrap.setText(p["bootstrap"])
         for e, v in zip(self.df, p["df"]):
             e.setText(v)
@@ -865,25 +1115,31 @@ class SettingsWindow(QMainWindow):
             e.setText(v)
         for c, v in zip(self.hd_pri, p["hd_pri"]):
             c.setValue(int(v))
+        for e, v in zip(self.hd_ss, p["hd_ss"]):
+            e.setText(v)
 
     def _collect(self) -> dict:  #vers 18
         try:
             boards = [int(x) for x in self.boards.text().replace(" ", "").split(",") if x]
         except ValueError:
             raise ValueError("Zorro RAM boards must be numbers in KB")
-        return {"preset": self.preset.currentText(), "cpu": 0 if self.cpu.currentIndex() == 0 else int(self.cpu.currentText()),
+        return {"preset": self.preset.currentText(), "cpu": 0 if self.cpu.currentIndex() == 0 else cpu_number(self.cpu.currentText()), "cpu_name": "" if self.cpu.currentIndex() == 0 else self.cpu.currentText(),
                 "fast_mb": self.fast.value(), "addr24": self.addr24.isChecked(), "fpu": next(i for i, r in enumerate(self.fpu) if r.isChecked()), "clx": next(i for i, r in enumerate(self.clx) if r.isChecked()), "chipset": ("", "ocs", "ecs")[self.chipset.currentIndex()], "c2p": self.c2p.isChecked(), "z2_kb": (0, 512, 1024, 2048, 4096, 8192)[self.z2.currentIndex()], "z3_kb": (0, 16384, 32768, 65536, 131072, 262144, 524288, 1048576)[self.z3.currentIndex()],
                 "proc_kb": (0, 4096, 8192, 16384, 32768, 65536, 131072, 262144)[self.proc.currentIndex()], "df_write": [not c.isChecked() for c in self.dfwp], "vkeyboard": self.vkbd.isChecked(), "pause_unfocus": self.pause_unfocus.isChecked(), "rctrl": self.rctrl.isChecked(), "rtg": self.rtg.isChecked(), "blit": int(self.blit[0].isChecked()), "snd_filter": self.snd_filter.currentIndex(), "snd_sep": self.snd_sep.value(), "port0": ("mouse", "joy", "none")[self.port0.currentIndex()], "port1": ("mouse", "joy", "none")[self.port1.currentIndex()], "slow_kb": (0, 512, 1024, 1792)[self.slow.currentIndex()], "disp_line": self.disp_line.currentIndex(), "disp_filter": self.disp_filter.currentIndex(), "disp_aspect": self.disp_aspect.currentIndex(), "disp_scale": self.disp_scale.currentIndex(),
                 "snd_out": ("qt", "pipewire")[self.snd_out.currentIndex()], "snd_rate": int(self.snd_rate.currentText()),
-                "snd_bits": (8, 16, 24, 32)[self.snd_bits.currentIndex()], "snd_ch": int(self.snd_ch.currentText()), "swapper": [self.swap.item(i).text() for i in range(self.swap.count())], "chip_kb": (0, 256, 512, 1024, 2048)[self.chip.currentIndex()], "mhz": self.SPEEDS[self.speed.currentIndex()], "pal": self.pal.currentIndex() == 0, "rom": self.rom.text(), "bootstrap": self.bootstrap.text(),
-                "df": [e.text() for e in self.df], "hd": [e.text() for e in self.hd], "hd_pri": [c.value() for c in self.hd_pri], "hdf_write": self.hdf_write.isChecked(), "hf_heads": self.hf_heads.value(), "hf_spt": self.hf_spt.value(),
+                "snd_bits": (8, 16, 24, 32)[self.snd_bits.currentIndex()], "snd_ch": int(self.snd_ch.currentText()), "swapper": [self.swap.item(i).text() for i in range(self.swap.count())], "chip_kb": (0, 256, 512, 1024, 2048)[self.chip.currentIndex()], "mhz": self.SPEEDS[self.speed.currentIndex()], "pal": self.pal.currentIndex() == 0, "rom": self.rom.text(), "ext_rom": self.ext_rom.text(), "xfer": self.xfer.text(), "cart": self.cart.currentText(), "rtc": self.rtc.isChecked(), "bootstrap": self.bootstrap.text(),
+                "df": [e.text() for e in self.df], "hd": [e.text() for e in self.hd], "hd_pri": [c.value() for c in self.hd_pri], "hd_ss": [e.text() for e in self.hd_ss], "hdf_write": self.hdf_write.isChecked(), "hf_heads": self.hf_heads.value(), "hf_spt": self.hf_spt.value(),
                 "boards_kb": boards, "audio": self.audio.isChecked(), "status": self.status.isChecked(), "trim": self.trim.isChecked(),
                 "joykeys": {a: b.key for a, b in self.joykeys.items() if b.key}}
 
-    def _new(self) -> None:  #vers 1
+    def _new(self) -> None:  #vers 2
+        """New profile from the settings shown now."""
         name, ok = QInputDialog.getText(self, "New profile", "Name")
         if ok and name.strip():
-            config.save_profile(name.strip(), dict(config.PROFILE_DEFAULT))
+            try:
+                config.save_profile(name.strip(), self._collect())
+            except ValueError as e:
+                return QMessageBox.warning(self, "Morosa Settings", str(e))
             self._reload(name.strip())
 
     def _save(self) -> None:  #vers 1

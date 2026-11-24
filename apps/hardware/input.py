@@ -7,6 +7,7 @@ Morosa Input - Amiga keyboard serial protocol on CIA-A, mouse counters and joyst
 
 ##Methods list -
 # Keyboard
+# Keyboard.cra_write
 # Keyboard.line
 # Keyboard.press
 # Keyboard.release
@@ -14,6 +15,7 @@ Morosa Input - Amiga keyboard serial protocol on CIA-A, mouse counters and joyst
 # Ports._dat
 # Ports._press
 # Ports.fire_bits
+# Ports._polled
 # Ports.joy
 # Ports.mouse_button
 # Ports.mouse_move
@@ -38,7 +40,12 @@ class Keyboard:
     def release(self, code: int) -> None:  #vers 1
         self.queue.append(code & 0x7F | 0x80)
 
-    def line(self) -> None:  #vers 1
+    def cra_write(self, v: int) -> None:  #vers 1
+        """A CRA write with bit 6 set counts as the handshake pulse, even when it ends within one line."""
+        if v & 0x40:
+            self.seen_out = True
+
+    def line(self) -> None:  #vers 2
         out = bool(self.cia.cra & 0x40)
         if self.waiting:
             if out:
@@ -65,11 +72,17 @@ class Ports:
         self.x = self.x + dx & 0xFF
         self.y = self.y + dy & 0xFF
 
-    def mouse_button(self, left: bool = None, right: bool = None) -> None:  #vers 1
-        if left is not None:
-            self.left = left
-        if right is not None:
-            self.right = right
+    def mouse_button(self, left: bool = None, right: bool = None) -> None:  #vers 2
+        for name, v in (("left", left), ("right", right)):
+            if v is None:
+                continue
+            if v:
+                setattr(self, name, True)
+                setattr(self, "_seen_" + name, False)
+            elif getattr(self, "_seen_" + name, True):
+                setattr(self, name, False)
+            else:
+                setattr(self, "_rel_" + name, True)
 
     def joy(self, up=False, down=False, left=False, right=False, fire=False, fire2=False) -> None:  #vers 2
         self.up, self.down, self.jl, self.jr, self.fire, self.fire2 = up, down, left, right, fire, fire2
@@ -91,17 +104,29 @@ class Ports:
             return self.fire2 if second else self.fire
         return False
 
-    def fire_bits(self) -> int:  #vers 2
+    def fire_bits(self) -> int:  #vers 3
         """CIA-A PRA input bits 6 (port 1) and 7 (port 2), active low."""
-        return 0xC0 & ~(0x40 if self._press(self.devs[0], False) else 0) & ~(0x80 if self._press(self.devs[1], False) else 0)
+        v = 0xC0 & ~(0x40 if self._press(self.devs[0], False) else 0) & ~(0x80 if self._press(self.devs[1], False) else 0)
+        self._polled("left")
+        return v
 
-    def read(self, off: int):  #vers 3
+    def _polled(self, name: str) -> None:  #vers 1
+        """Mark a press as seen by the guest; a release that arrived early is applied now."""
+        if getattr(self, name, False):
+            setattr(self, "_seen_" + name, True)
+            if getattr(self, "_rel_" + name, False):
+                setattr(self, "_rel_" + name, False)
+                setattr(self, name, False)
+
+    def read(self, off: int):  #vers 4
         if off == 0x00A:
             return self._dat(self.devs[0])
         if off == 0x00C:
             return self._dat(self.devs[1])
         if off == 0x016:
-            return 0xFFFF & ~(0x400 if self._press(self.devs[0], True) else 0) & ~(0x4000 if self._press(self.devs[1], True) else 0)
+            v = 0xFFFF & ~(0x400 if self._press(self.devs[0], True) else 0) & ~(0x4000 if self._press(self.devs[1], True) else 0)
+            self._polled("right")
+            return v
         return None
 
     def write(self, off: int, v: int) -> bool:  #vers 1

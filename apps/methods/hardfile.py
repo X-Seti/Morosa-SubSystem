@@ -130,16 +130,15 @@ def _sum_ok(blk: bytes, n: int = 128) -> bool:  #vers 1
     return sum(struct.unpack(f">{n}I", blk[:n * 4])) & 0xFFFFFFFF == 0
 
 
-def describe(path: str) -> list:  #vers 1
+def describe(path: str) -> list:  #vers 2
     """Lines describing a hard disk image: RDB or plain hardfile, filesystem, geometry, and what is wrong."""
     out = []
     if os.path.isdir(path):
-        from apps.methods import folder_disk
-        out.append("Folder: becomes a read-only FFS disk.")
-        try:
-            out.append(f"Boot folder with S/Startup-sequence: {folder_disk.boot_root(path)}")
-        except (ValueError, OSError):
-            out.append("No S/Startup-sequence found; not bootable.")
+        out.append("Folder: mounted live as a host filesystem (Zorro II board).")
+        s_dir = next((n for n in os.listdir(path) if n.lower() == "s"), None)
+        has = s_dir and any(n.lower() == "startup-sequence" for n in os.listdir(os.path.join(path, s_dir)))
+        out.append("S/Startup-Sequence found; bootable." if has else "No S/Startup-Sequence in this folder; not bootable.")
+        out.append("Writes follow the hard disk write setting.")
         return out
     try:
         size = os.path.getsize(path)

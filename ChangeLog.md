@@ -97,3 +97,69 @@
 - Nov 22 2026 - Agnus: super-hires fetch width matches AGA (84 words at DDF 38-D8, FMODE 3). Added MOROSA_REGLOG=1 register log.
 - Nov 22 2026 - RTG option B: Cirrus GD5446 chip (cirrus.py) and Picasso IV Zorro III board (picasso.py), 8/15/16/24/32 bit, blitter, cursor. Untested with a real Picasso96 driver. MOROSA_RTGLOG=1 logs ports.
 - Nov 22 2026 - Zorro III autoconfig fixed: low nibbles at +$100 were missing, so no Z3 board was ever configured.
+- Nov 23 2026 - Drives: Boot Pri below 0 skips Startup-sequence search for folders; lowest value shows 'No boot'.
+- Nov 23 2026 - Drives: power icon beside Boot Pri, green boots, slashed grey does not.
+- Nov 23 2026 - TODO (later): convert folder to HDF and HDF to folder. Planned now: host folder filesystem handler (hostfs), metadata stored outside the folder.
+- Nov 23 2026 - Drives: folders mount live through a Zorro II host filesystem (hostfs.py, hostfs_packets.py); no disk image built. Protection and comments stored in Morosa/fsdatabase. Writes need hardfile write on.
+- Nov 23 2026 - Drives: per-folder Startup-Sequence override (file shown as S:Startup-Sequence; folder untouched). Hardfile info text updated for folders.
+- Nov 23 2026 - Status bar: HostFS LED shown when a folder drive is fitted; lights on host filesystem activity.
+- Nov 23 2026 - CPU list: added 68EC020/030/040/060 and 68LC040/060; EC/LC types set 24-bit and FPU off. Profile stores cpu_name.
+- Nov 23 2026 - CPU selection: leaving an EC/LC type resets 24-bit and FPU; profile load checks cpu_name matches cpu.
+- Nov 23 2026 - A1200/CD32: Fast RAM now fitted as Zorro board so the ROM sees it; fixes RAM Disk full with 1 MB chip.
+- Nov 23 2026 - Chip RAM fixed at 2 MB for A3000, A1200, A4000, CD32 (menu locked); extra RAM is Fast RAM from trapdoor/boards.
+- Nov 23 2026 - TODO: A1200 settings show Trapdoor, not Zorro: RAM amount, accelerator, CPU, MMU, optional PiStorm emulation.
+- Nov 23 2026 - A1000 settings: Expansion port naming; Chip RAM limited to 256/512 KB (front RAM module).
+- Nov 23 2026 - A1000 settings: only 68000, OCS, chip 256/512 KB; hides slow RAM, Zorro III, processor slot, FPU, 24-bit, RTG.
+- Nov 23 2026 - A1000: Hard drives/CD page hidden; IO Ports page lists the real A1000 connectors.
+- Nov 23 2026 - A500 settings: side expansion port, trapdoor RAM, 68000/68010, chip 512 KB/1 MB, real connector list. Model rules now one table.
+- Nov 23 2026 - A500+ settings: ECS locked, chip 512 KB/1 MB, trapdoor RAM, built-in clock listed.
+- Nov 23 2026 - ROM page shows the original Kickstart for A1000, A500, A500+; other ROMs still allowed.
+- Nov 23 2026 - TODO: add A1500 preset (A2000 variant, UK, 2 floppies, no HD, 1 MB chip); slot details unconfirmed.
+- Nov 23 2026 - CDTV settings: 68000, 1 MB chip, expansion slot, connector list, ROM hint. TODO: CDTV clock and game ports unconfirmed.
+- Nov 23 2026 - ROM page: Extended ROM entry for CDTV (0xF00000) and CD32 (0xE00000), saved in the profile.
+- Nov 23 2026 - TODO: emulate all CDTV functions: memory cards (8 KB-1 MB), 2 KB NVRAM, CD-ROM drive, IR remote, MIDI, front panel.
+- Nov 23 2026 - A2000 settings: CPU slot allows 68020/68030 with FPU, 512 KB-2 MB chip, Zorro II slots, connector list, ROM hint.
+- Nov 23 2026 - Drives: Transfer folder (host folder shared as Transfer:, writable, never boots), any model. A2000 drive page shows SCSI slots only.
+- Nov 23 2026 - Boot wait: empty IDE bus reads 0x7F (was 0xFF), scsi.device no longer times out; first screen 1850 to 550 frames. Transfer folder picker now folder-only.
+- Nov 23 2026 - TODO: drag and drop files onto the Amiga screen into the Transfer folder.
+- Nov 23 2026 - TODO: A2091 SCSI controller for the A2000; hardfiles on A2000 are not supported yet.
+- Nov 23 2026 - TODO: hardfiles on every model, and real Amiga hard drives mounted from a physical disk or image.
+- Nov 23 2026 - TODO: add A2500 presets (A2000 + A2620 68020/68851/68881, 2 MB; A2630 68030/68882, 25 MHz). Needs MMU option, A2091 SCSI.
+- Nov 23 2026 - A600 settings: ECS locked, 1-2 MB chip, trapdoor and PCMCIA, IDE slots 0-1, connector list, ROM hint.
+- Nov 23 2026 - TODO: A600 PCMCIA slot (up to 4 MB RAM, CF cards); clock source unconfirmed.
+- Nov 23 2026 - A3000 settings: 68030/68040/68060, Zorro III slots, SCSI slots 2-8, motherboard Fast RAM, connector list. TODO: check A3000 chip size (1 or 2 MB).
+- Nov 23 2026 - TODO: add A3000T preset (A3000 tower: 5 Zorro III, 4 ISA, 7 internal drive bays, 68030 or 68040 at 25 MHz, 5-18 MB RAM).
+- Nov 23 2026 - A1200 settings: all accelerator CPUs, 24-bit and FPU shown, trapdoor RAM, IDE slots 0-1, connector list, ROM hint.
+- Nov 23 2026 - TODO: A1200 PCMCIA slot.
+- Nov 23 2026 - CPU menu shows the model's own CPU (e.g. 68EC020 (model default)) not Preset; A1200 and CD32 default to 24-bit.
+- Nov 23 2026 - CD32 settings: 68EC020 default, accelerator CPUs, no floppy page, expansion socket, FMV cartridge entry (not emulated), connector list.
+- Nov 23 2026 - TODO: CD32 FMV cartridge (MPEG), save 1 KB EEPROM saves to a file, CD32 keyboard on AUX port.
+- Nov 23 2026 - CD32 cartridge menu: None, FMV, SX-1, SX-32, TF. Cartridge decides floppy page, Fast RAM row and CPU list; no cartridge gives no Fast RAM.
+- Nov 23 2026 - A4000, A4000D, A4000T settings: AGA, 2 MB chip, 68030-68060, Zorro III slots, IDE; A4000T adds SCSI slots 2-8.
+- Nov 23 2026 - TODO: A4000T Fast SCSI-2 controller; A4000 IDE slot count and A4000D vs A4000 differences unconfirmed.
+- Nov 23 2026 - TODO: PCI bridge cards (Mediator, Prometheus) on A1200, A2000, A3000, A4000 expansion pages; PCI graphics, sound, network cards.
+- Nov 23 2026 - TODO: PowerPC models (AmigaOne, Sam440, Sam460, Pegasos) to run AmigaOS 4.0/4.1 final and MorphOS: PPC core, PCI bus, ATA, USB.
+- Nov 23 2026 - TODO: research A3000/A4000 CPU slot accelerators: CyberStorm PPC and Mk II, BFG9060. CPU, FPU, MMU, RAM, PowerPC.
+- Nov 23 2026 - TODO: QEMU launch for PowerPC machines to run AmigaOS 4.
+- Nov 23 2026 - A1200: optional trapdoor clock (RP5C01 type at 0xDC0000, host time). battclock.resource now found. MSM6242B was not detected.
+- Nov 23 2026 - Transfer board sets Amiga system time from host clock at boot (timer.device), so clockless models show the right time.
+- Nov 23 2026 - AGA sprites: 16/32/64 pixel fetch (FMODE), SPRES, SV9/EV9, sub-pixel position, palette bank (BPLCON4). Fixes corrupt highres pointer. Rebuild video_ext.
+- Nov 23 2026 - Mouse buttons: a press released before the guest polls it is held until read, so short clicks register.
+- Nov 23 2026 - Folder drives hide Amiberry _UAEFSDB.___ files. Protection bits and comments stay in the fsdatabase folder.
+- Nov 23 2026 - Folder drives import protection bits and comments from Amiberry _UAEFSDB.___ once per folder into fsdatabase.
+- Nov 23 2026 - F10 saves dumps/dumpNN.png and .txt: display registers, sprites, planes, colours, copper list. Added to chase drag-icon corruption.
+- Nov 24 2026 - crash.log in the Morosa folder: Python errors and hard crashes. Option in Settings, Miscellaneous. On by default.
+- Nov 23 2026 - Settings: Expansions nav item shows model name as tooltip (icon-only nav). All 12 models tested: rules, CPU list, save and load.
+- Nov 23 2026 - Hardware info moved under Quickstart; it updates live as settings change.
+- Nov 23 2026 - Chipset page: shows the model's chipset (OCS, ECS, AGA), only valid swaps selectable; duplicate label removed.
+- Nov 23 2026 - New profile (+) now copies the settings shown, not A500 defaults; fixes A1200 and HD settings reverting.
+- Nov 23 2026 - Hard drive write option renamed: covers folder drives too. Folder writes tested: create, make dir, rename.
+- Nov 24 2026 - Fixed freeze when dragging many icons: Musashi clears the interrupt level once taken; level now re-asserted every line. Lost BLIT/VERTB interrupts.
+- Nov 24 2026 - F10 dump now lists the last 64 blits (registers, sizes) to trace screen corruption.
+- Nov 24 2026 - Immediate blitter mode raises the blit interrupt on the next line, not inside the BLTSIZE write. Fixes queued-blit corruption.
+- Nov 24 2026 - DIWHIGH ($1E4) emulated on ECS/AGA: upper window bits; DIWSTRT/DIWSTOP writes reset it. Display window shared by Agnus and display box.
+- Nov 24 2026 - Sound stutter: Qt audio buffer level now paces emulation (150 ms buffer, 10 ms timer, up to 3 frames per tick). Replaces free-running 20 ms timer drifting from the audio clock.
+- Nov 24 2026 - Speed: frames can skip drawing (2.5x faster headless). While the guest loads from disk or host folders, extra frames run unthrottled (12 ms budget per tick). Behind-audio catch-up skips drawing.
+- Nov 24 2026 - Keyboard: a CRA bit 6 handshake pulse shorter than one scanline is now seen. Fast 68020 code missed it and the keyboard stopped. Dump lists keyboard state.
+- Nov 24 2026 - Speed: C draws planes straight from chip RAM, caches the palette, expands bitplane bytes by table; colour writes take a fast path. Drawn frame 19.6 to 15.5 ms. Rebuild video_ext.
+- Nov 24 2026 - Shift+F10 profiles 100 ticks and saves dumps/profNN.txt (busiest functions, real fps).

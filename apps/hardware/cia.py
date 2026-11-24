@@ -33,6 +33,7 @@ class CIA:
         self.port_in = port_in or (lambda port: 0xFF)
         self.port_out = port_out or (lambda port, value: None)
         self.sp_out = sp_out or (lambda bit: None)
+        self.cra_cb = None
         self.pra = self.prb = self.ddra = self.ddrb = 0
         self.latch_a = self.latch_b = 0xFFFF
         self.cnt_a = self.cnt_b = 0xFFFF
@@ -244,6 +245,8 @@ class CIA:
             if v & 1 and not self.cra & 1:
                 self.tog_a = 1
             self.cra = v & ~0x10
+            if self.cra_cb:
+                self.cra_cb(v)
         elif reg == CRB:
             if v & 0x10:
                 self.cnt_b = self.latch_b

@@ -5,3 +5,10 @@ apps/core/cpu.c
 build/
 apps/core/musashi/m68kops.*
 apps/core/musashi/m68kmake
+crash.log
+dumps/
+*.key
+/temp
+/temp
+/fsdatabase
+/configs

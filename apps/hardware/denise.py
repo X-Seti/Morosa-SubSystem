@@ -37,6 +37,7 @@ class Denise:
         self.bplcon0 = self.bplcon1 = self.bplcon2 = self.bplcon3 = 0
         self.color = [0] * 32
         self.spr = [dict(pos=0, ctl=0, a=0, b=0, armed=False) for _ in range(8)]
+        self.spr_width = 16
         self.fb = bytearray(FB_WIDTH * FB_LINES * 4)
         self.bpldat = [0] * 6
         self.joy = [0, 0]
@@ -47,6 +48,7 @@ class Denise:
         self.cw = []                  # (x, index, value) colour changes this line
         self.cw0 = {}                 # index -> value at line start
         self.agnus = None
+        self.pver = id(self) & 0x3FFFFFFF
 
     def set_color(self, n: int, val: int) -> None:  #vers 1
         """Store a palette entry; copper writes are logged with beam x for mid-line changes."""
@@ -54,6 +56,7 @@ class Denise:
             self.cw0.setdefault(n, self.color[n])
             self.cw.append((2 * self.agnus.hpos, n, val))
         self.color[n] = val
+        self.pver = self.pver + 1 & 0x3FFFFFFF
 
     # ---- registers ----
     def write(self, off: int, v: int) -> bool:  #vers 1
@@ -117,13 +120,16 @@ class Denise:
         return bytes(((c & 15) * 17, (c >> 4 & 15) * 17, (c >> 8 & 15) * 17, 255))
 
     # ---- rendering ----
-    def render_line(self, vpos: int, planes: list, x_abs: int, diw_h: tuple, diw_v: tuple) -> None:  #vers 5
+    def render_line(self, vpos: int, planes, x_abs: int, diw_h: tuple, diw_v: tuple) -> None:  #vers 6
         """planes: per-plane words for the fetched region from lowres x_abs; drawn in C, clipped to the window."""
-        planes = [p if isinstance(p, np.ndarray) else np.asarray(p, dtype=">u2") for p in planes]
+        if not isinstance(planes, tuple):
+            planes = [p if isinstance(p, np.ndarray) else np.asarray(p, dtype=">u2") for p in planes]
         spr = [(s["armed"], s["pos"], s["ctl"], s["a"], s["b"]) for s in self.spr]
-        pal = list(self.color)
-        for n, v in self.cw0.items():
-            pal[n] = v
+        pal, pv = self.color, self.pver
+        if self.cw0:
+            pal, pv = list(pal), -1
+            for n, v in self.cw0.items():
+                pal[n] = v
         chg = self.cw
         self.cw, self.cw0 = [], {}
         lace = self.bplcon0 & 4
@@ -131,4 +137,5 @@ class Denise:
         row = vpos if dbl else 2 * vpos + (0 if self.agnus.lof else 1) if lace else 2 * vpos
         self.clxdat |= video_ext.render_line(self.fb, row, planes, x_abs, diw_h[0], diw_h[1], diw_v[0], diw_v[1], self.bplcon0,
                               self.bplcon1, self.bplcon2, self.nplanes(), self.aga, self.pens_xor(),
-                              self.pf2_offset(), pal, spr, chg, 0 if lace or dbl else 1, self.clxcon)
+                              self.pf2_offset(), pal, spr, chg, 0 if lace or dbl else 1, self.clxcon,
+                              self.spr_width, self.bplcon3, getattr(self, "bplcon4", 0x11), pv)

@@ -98,7 +98,7 @@ class IDEChannel:
         self.pending = on and not self.devctl & 2
         self.irq(self.pending)
 
-    def read(self, reg: int, size: int = 1) -> int:  #vers 3
+    def read(self, reg: int, size: int = 1) -> int:  #vers 4
         d = self._disk()
         if reg == 0:
             if self.status & DRQ and not self.writing:
@@ -117,7 +117,7 @@ class IDEChannel:
                 return v
             return 0
         if d is None and reg in (1, 2, 3, 4, 5, 7):
-            return 0xFF if reg == 7 and not any(self.disks) else 0
+            return 0x7F if reg == 7 and not any(self.disks) else 0
         if reg == 1:
             return self.err
         if reg == 2:
@@ -134,7 +134,7 @@ class IDEChannel:
             self._irq(False)
             return self.status if d else 0
         if reg == 0x406:
-            return self.status if d else 0xFF if not any(self.disks) else 0
+            return self.status if d else 0x7F if not any(self.disks) else 0
         return 0
 
     def write(self, reg: int, v: int, size: int = 1) -> None:  #vers 2

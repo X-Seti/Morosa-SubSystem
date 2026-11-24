@@ -57,6 +57,7 @@ class Lisa(Denise):
             return True
         if off == 0x1FC:
             self.fmode = v
+            self.spr_width = (16, 32, 32, 64)[v >> 2 & 3]
             return True
         return super().write(off, v)
 

@@ -37,6 +37,7 @@ Morosa Amiga hardware - CPU, memory map and the custom chips wired together as a
 # Amiga.add_board
 # Amiga._akiko_write
 # Amiga._ciab_out
+# Amiga.add_rtc
 # Amiga._rtc_read
 # Amiga._rtc_write
 # Amiga.flush_disks
@@ -49,6 +50,7 @@ Morosa Amiga hardware - CPU, memory map and the custom chips wired together as a
 # Amiga.boot
 # Amiga.load_rom
 # Amiga.reset
+# Amiga._run_cpu
 # Amiga.run_frame
 
 from apps.hardware.akiko import AKIKO_BASE, Akiko
@@ -122,9 +124,12 @@ class Amiga:
         slow_kb = min(slow_kb, 1792)
         self.slow = SparseRAM(slow_kb * 1024)
         self.proc = SparseRAM(proc_kb * 1024)
-        self.act_hd = self.act_ram = 0
-        self._act_last = (0, 0, 0)
+        self.act_hd = self.act_ram = self.act_hfs = 0
+        self.hostfs = False
+        self._act_last = (0, 0, 0, 0)
         self.fast_base = MOBO_BASE if preset in MOBO_PRESETS else FAST_BASE
+        from apps.hardware.hostfs import GuestMem
+        self.guest_mem = GuestMem(self.bus, [(self.fast_base, self.fast.buf), (SLOW_BASE, self.slow.buf), (PROC_BASE, self.proc.buf)])
         self.rom = b""
         self.wcs, self.wcs_lock = None, False
         self.paula = Paula(irq=self._irq, nch=snd[0], bits=snd[1], rate=snd[2])
@@ -143,6 +148,7 @@ class Amiga:
         self.ports = self.agnus.inp = Ports()
         self.ports.devs = list(ports)
         self.keyboard = self.agnus.kbd = Keyboard(self.ciaa)
+        self.ciaa.cra_cb = self.keyboard.cra_write
         self.gary = Gary()
         if preset in MOBO_PRESETS:
             self.bus.berr_on = lambda: bool(self.gary.timeout)
@@ -322,21 +328,30 @@ class Amiga:
         for i, byte in enumerate(v.to_bytes(4, "big")[4 - n:]):
             self.akiko.write(o + i, byte)
 
+    def add_rtc(self) -> None:  #vers 1
+        """Fit a trapdoor clock module (RP5C01 type)."""
+        self.rtc = RP5C01()
+        self.bus.hook_range(RTC_BASE, RTC_BASE + 0x10000, self._rtc_read, self._rtc_write)
+
     def _rtc_read(self, a: int, size: int) -> int:  #vers 1
         return self.rtc.read(a & 0xFFFF) if size == 0 else self.rtc.read(a & 0xFFFF) << 8 | self.rtc.read(a + 1 & 0xFFFF)
 
     def _rtc_write(self, a: int, size: int, v: int) -> None:  #vers 1
         self.rtc.write(a & 0xFFFF, v & 0xFF)
 
-    def activity(self) -> dict:  #vers 2
+    def activity(self) -> dict:  #vers 3
         """Which parts were busy since the last call."""
         from apps.hardware.cdimage import CDImage
-        now = (self.act_hd, self.act_ram + self.cpu.touches, CDImage.reads)
+        now = (self.act_hd, self.act_ram + self.cpu.touches, CDImage.reads, self.act_hfs)
         last, self._act_last = self._act_last, now
         return {"FD": any(d.motor for d in self.drives), "HD": now[0] != last[0], "CD": now[2] != last[2],
-                "RAM": now[1] != last[1], "CPU": not self.cpu.stopped}
+                "RAM": now[1] != last[1], "CPU": not self.cpu.stopped, "HostFS": now[3] != last[3]}
 
-    def add_board(self, board) -> None:  #vers 1
+    def add_board(self, board) -> None:  #vers 3
+        if hasattr(board, "attach"):
+            board.attach(self.guest_mem)
+            board.owner = self
+            self.hostfs = self.hostfs or hasattr(board, "vol")
         (self.z2 if board.zorro == 2 else self.z3).add(board)
 
     def _map_board(self, board, base: int, size: int) -> None:  #vers 3
@@ -505,14 +520,20 @@ class Amiga:
         self.cpu.reset(pc, sp)
         self.paula.intena = self.paula.intreq = 0
 
-    def run_frame(self) -> None:  #vers 3
-        self.agnus.run_frame(lambda cycles: self.cpu.execute(cycles * self.ratio))
+    def _run_cpu(self, cycles: int) -> int:  #vers 1
+        """Re-assert the interrupt level first; Musashi clears it when taken."""
+        self.cpu.irq_level = self.paula.level
+        return self.cpu.execute(cycles * self.ratio)
+
+    def run_frame(self, skip: bool = False) -> None:  #vers 5
+        """One frame; skip leaves the picture undrawn to save time."""
+        self.agnus.skip = skip
+        self.agnus.run_frame(self._run_cpu)
 
     def display_box(self):  #vers 1
         """(x, y, w, h) of the active display window in framebuffer pixels."""
         a = self.agnus
-        hs, he = a.diwstrt & 0xFF, (a.diwstop & 0xFF) | 0x100
-        vs, ve = a.diwstrt >> 8, (a.diwstop >> 8) | (0 if a.diwstop >> 8 & 0x80 else 0x100)
+        hs, he, vs, ve = a.window()
         x0, x1 = max(0, (hs - LEFT_ABS) * 2), min(FB_WIDTH, (he - LEFT_ABS) * 2)
         y0, y1 = max(0, vs * 2), min(FB_LINES, ve * 2)
         if x1 - x0 < 64 or y1 - y0 < 64:
