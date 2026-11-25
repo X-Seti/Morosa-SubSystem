@@ -1,4 +1,4 @@
-#this belongs in apps/gui/screen.py - Version: 15
+#this belongs in apps/gui/screen.py - Version: 16
 # X-Seti - November 17 2026 - Morosa - Morosa Machine Screen.
 
 """
@@ -210,17 +210,18 @@ class MachineScreen(QWidget):
         self._prof.enable()
         self.note, self.note_until = "Profiling 100 ticks", time.monotonic() + 2.0
 
-    def _profile_end(self) -> None:  #vers 1
+    def _profile_end(self) -> None:  #vers 2
         """Stop the profile and write the busiest functions."""
         import io
         import pstats
-        self._prof.disable()
+        prof, self._prof = self._prof, None
+        prof.disable()
         out = io.StringIO()
         secs, frames = time.monotonic() - self._pt, self.fcount - self._pf
         out.write(f"ticks {self._pn} frames {frames} seconds {secs:.2f} fps {frames / secs:.1f}\n")
         for key in ("tottime", "cumulative"):
             out.write(f"\nsorted by {key}\n")
-            pstats.Stats(self._prof, stream=out).sort_stats(key).print_stats(28)
+            pstats.Stats(prof, stream=out).sort_stats(key).print_stats(28)
         from apps.methods import debugdump
         d = config.ROOT / "dumps"
         d.mkdir(exist_ok=True)
@@ -228,7 +229,6 @@ class MachineScreen(QWidget):
         while (d / f"prof{n:02d}.txt").exists():
             n += 1
         (d / f"prof{n:02d}.txt").write_text(out.getvalue(), encoding="utf-8")
-        self._prof = None
         self.note, self.note_until = f"Saved prof{n:02d}", time.monotonic() + 2.0
 
     def state_dump(self) -> None:  #vers 1

@@ -2,7 +2,7 @@
 # X-Seti - November 22 2026 - Morosa - Settings Page Helpers.
 
 """
-Morosa Settings Pages - SVG page icons and greyed placeholder pages for options not emulated yet.
+Morosa Emulation Pages - SVG page icons and greyed placeholder pages for options not emulated yet.
 """
 
 ##Methods list -

@@ -1,4 +1,4 @@
-#this belongs in apps/hardware/agnus.py - Version: 13
+#this belongs in apps/hardware/agnus.py - Version: 14
 # X-Seti - November 17 2026 - Morosa - Morosa Agnus.
 
 """
@@ -287,9 +287,9 @@ class Agnus:
             self.lines = 312 if self.beamcon & 0x20 else 262
             self.ccl = CCLOCKS
 
-    def run_frame(self, cpu_run=None) -> None:  #vers 2
+    def run_frame(self, cpu_run=None) -> None:  #vers 3
         self.vpos = 0
-        for _ in range(self.lines):
+        for _ in range(self.lines + (1 if self.lof and not self.beamcon & 0x80 else 0)):
             self.line(cpu_run)
         self.frames += 1
         if self.denise.bplcon0 & 4:

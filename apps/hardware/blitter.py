@@ -1,4 +1,4 @@
-#this belongs in apps/hardware/blitter.py - Version: 5
+#this belongs in apps/hardware/blitter.py - Version: 6
 # X-Seti - November 17 2026 - Morosa - Morosa Blitter.
 
 """
@@ -43,10 +43,11 @@ class Blitter:
         self.log = deque(maxlen=64)
         self.irq_due = False
 
-    def write(self, off: int, v: int) -> bool:  #vers 1
+    def write(self, off: int, v: int) -> bool:  #vers 2
         v &= 0xFFFF
         if off in REGS:
             if REGS[off] in ("cmod", "bmod", "amod", "dmod"):
+                v &= 0xFFFE
                 v = v - 0x10000 if v & 0x8000 else v
             setattr(self, REGS[off], v)
         elif off in PTRS:

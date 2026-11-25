@@ -3,7 +3,7 @@
 # X-Seti - November 17 2026 - Morosa - Settings Editor.
 
 """
-Morosa Settings - standalone editor for machine profiles and the AmiSys folder; runs a profile in a screen window.
+Morosa Emulation - standalone editor for machine profiles and the AmiSys folder; runs a profile in a screen window.
 """
 
 ##Methods list -
@@ -42,7 +42,7 @@ class SettingsWindow(QMainWindow):
 
     def __init__(self):  #vers 2
         super().__init__()
-        self.setWindowTitle("Morosa Settings")
+        self.setWindowTitle("Morosa Emulation")
         self.screens = []
         self.profiles = {}
         self.list = QListWidget()
@@ -204,7 +204,7 @@ class SettingsWindow(QMainWindow):
         try:
             config.save_profile(item.text(), self._collect())
         except ValueError as e:
-            return QMessageBox.warning(self, "Morosa Settings", str(e))
+            return QMessageBox.warning(self, "Morosa Emulation", str(e))
         if self.amisys.text():
             config.set_amisys(self.amisys.text())
         self._reload(item.text())
@@ -220,7 +220,7 @@ class SettingsWindow(QMainWindow):
         try:
             m = config.build_machine(self._collect())
         except (OSError, ValueError, NotImplementedError) as e:
-            return QMessageBox.warning(self, "Morosa Settings", str(e))
+            return QMessageBox.warning(self, "Morosa Emulation", str(e))
         w = MachineScreen(m, self.audio.isChecked())
         w.setWindowTitle(f"Morosa {self.preset.currentText()}")
         w.show()

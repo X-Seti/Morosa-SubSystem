@@ -1,4 +1,4 @@
-#this belongs in apps/hardware/amiga.py - Version: 30
+#this belongs in apps/hardware/amiga.py - Version: 31
 # X-Seti - November 17 2026 - Morosa - Morosa Amiga Hardware.
 
 """
@@ -354,12 +354,13 @@ class Amiga:
             self.hostfs = self.hostfs or hasattr(board, "vol")
         (self.z2 if board.zorro == 2 else self.z3).add(board)
 
-    def _map_board(self, board, base: int, size: int) -> None:  #vers 3
+    def _map_board(self, board, base: int, size: int) -> None:  #vers 4
         if hasattr(board, "map"):
             board.map(self.bus, self.cpu, base, size)
             return
         self.bus.hook_range(base, base + size, board.read, board.write)
-        self.cpu.add_ram(base, board.ram.buf)
+        if hasattr(board, "ram"):
+            self.cpu.add_ram(base, board.ram.buf)
 
     def _dma_read(self, a: int, n: int) -> bytes:  #vers 2
         self.act_hd += 1

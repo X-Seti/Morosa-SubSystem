@@ -163,3 +163,6 @@
 - Nov 24 2026 - Keyboard: a CRA bit 6 handshake pulse shorter than one scanline is now seen. Fast 68020 code missed it and the keyboard stopped. Dump lists keyboard state.
 - Nov 24 2026 - Speed: C draws planes straight from chip RAM, caches the palette, expands bitplane bytes by table; colour writes take a fast path. Drawn frame 19.6 to 15.5 ms. Rebuild video_ext.
 - Nov 24 2026 - Shift+F10 profiles 100 ticks and saves dumps/profNN.txt (busiest functions, real fps).
+- Nov 24 2026 - Blitter ignores modulo bit 0; fixes Turrican II logo rows.
+- Nov 24 2026 - Long frame adds a line; AGA Turrican II boots (PAL check waited for line 312).
+- Nov 24 2026 - CDTV DMAC board mapping no longer crashes (board has no RAM).

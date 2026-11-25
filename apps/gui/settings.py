@@ -1,8 +1,8 @@
-#this belongs in apps/gui/settings.py - Version: 38
+#this belongs in apps/gui/settings.py - Version: 39
 # X-Seti - November 17 2026 - Morosa - Settings Editor.
 
 """
-Morosa Settings - standalone editor for machine profiles and the AmiSys folder; runs a profile in a screen window.
+Morosa Emulation - standalone editor for machine profiles and the AmiSys folder; runs a profile in a screen window.
 """
 
 ##Methods list -
@@ -73,7 +73,7 @@ from apps.gui.settings_pages import page_icon, quick_configs, stub_group, stub_p
 from apps.gui.titlebar import TitleBar
 from apps.hardware.amiga import PRESETS
 from apps.methods import config
-from apps.methods.rom_scan import scan_roms
+from apps.methods.rom_scan import kickstart_label, scan_roms
 
 CPUS = ["Preset", "68000", "68010", "68EC020", "68020", "68EC030", "68030", "68EC040", "68LC040", "68040", "68EC060", "68LC060", "68060"]
 A1000_PORTS = ("<b>A1000 connectors</b><br>Video: RGB (DB23), composite (RCA), TV modulator<br>Audio: left and right (RCA)<br>"
@@ -202,7 +202,7 @@ class SettingsWindow(QMainWindow):
 
     def __init__(self):  #vers 5
         super().__init__()
-        self.setWindowTitle("Morosa Settings")
+        self.setWindowTitle("Morosa Emulation")
         self.setWindowFlag(Qt.WindowType.FramelessWindowHint, True)
         self.screens = []
         self.profiles = {}
@@ -704,6 +704,7 @@ class SettingsWindow(QMainWindow):
             self.cart_box.setVisible(model == "CD32")
         if hasattr(self, "rom_form"):
             self.rom_form.setRowVisible(self.ext_rom_row, model in ("CDTV", "CD32"))
+            self.rom_form.setRowVisible(self.boot_row, model in ("A1000", "A3000"))
         if hasattr(self, "rom_hint"):
             self.rom_hint.setText(f"Original ROM: {r['rom']}. Newer Kickstart ROMs also work." if r and "rom" in r else "")
         if hasattr(self, "nav") and self.nav.count() >= 12:
@@ -762,16 +763,16 @@ class SettingsWindow(QMainWindow):
             self.cpu.setCurrentIndex(0 if not v[0] else CPUS.index(str(v[0])))
             self.fast.setValue(v[1])
 
-    def _tab_rom(self) -> QWidget:  #vers 3
+    def _tab_rom(self) -> QWidget:  #vers 4
         w = QWidget()
         lo = QVBoxLayout(w)
         form = QFormLayout()
-        form.addRow("Boot ROM (A1000)", self._pick(self.bootstrap, "ROM (*.rom *.bin *)"))
-        form.addRow("Kickstart ROM", self._pick(self.rom, "ROM (*.rom *.bin *)"))
+        self.boot_row = self._pick(self.bootstrap, "ROM (*.rom *.bin *)")
+        form.addRow("Boot ROM", self.boot_row)
+        form.addRow("Kickstart ROM", self._pick(self.rom, "ROM (*.rom *.bin *)", extra=self.rom_info))
         self.ext_rom_row = self._pick(self.ext_rom, "ROM (*.rom *.bin *)")
         form.addRow("Extended ROM", self.ext_rom_row)
         self.rom_form = form
-        form.addRow("", self.rom_info)
         self.rom_hint = QLabel()
         self.rom_hint.setWordWrap(True)
         form.addRow("", self.rom_hint)
@@ -871,7 +872,7 @@ class SettingsWindow(QMainWindow):
                     w.m.drives[unit].flush()
                     w.m.insert_disk(f.read(), unit, self.dfwp[unit].isChecked(), it.text())
             except OSError as e:
-                QMessageBox.warning(self, "Morosa Settings", str(e))
+                QMessageBox.warning(self, "Morosa Emulation", str(e))
 
     def _tab_keys(self) -> QWidget:  #vers 1
         w = QWidget()
@@ -953,15 +954,16 @@ class SettingsWindow(QMainWindow):
             with open(path, "wb") as f:
                 f.truncate(mb * 1024 * 1024)
         except OSError as e:
-            return QMessageBox.warning(self, "Morosa Settings", str(e))
+            return QMessageBox.warning(self, "Morosa Emulation", str(e))
         config.set_last_dir("hdf", os.path.dirname(path))
         free = [e for e in self.hd if not e.text().strip()]
         if free:
             free[0].setText(path)
 
-    def _rom_info(self, path: str) -> None:  #vers 1
+    def _rom_info(self, path: str) -> None:  #vers 2
         try:
-            self.rom_info.setText(f"{os.path.getsize(path) // 1024} KB" if path else "")
+            kb = f"{os.path.getsize(path) // 1024} KB" if path else ""
+            self.rom_info.setText(f"{kickstart_label(path)}, {kb}" if path and kickstart_label(path) else kb)
         except OSError:
             self.rom_info.setText("file not found")
 
@@ -1139,7 +1141,7 @@ class SettingsWindow(QMainWindow):
             try:
                 config.save_profile(name.strip(), self._collect())
             except ValueError as e:
-                return QMessageBox.warning(self, "Morosa Settings", str(e))
+                return QMessageBox.warning(self, "Morosa Emulation", str(e))
             self._reload(name.strip())
 
     def _save(self) -> None:  #vers 1
@@ -1149,7 +1151,7 @@ class SettingsWindow(QMainWindow):
         try:
             config.save_profile(item.text(), self._collect())
         except ValueError as e:
-            return QMessageBox.warning(self, "Morosa Settings", str(e))
+            return QMessageBox.warning(self, "Morosa Emulation", str(e))
         if self.amisys.text():
             config.set_amisys(self.amisys.text())
         self._reload(item.text())
@@ -1203,7 +1205,7 @@ class SettingsWindow(QMainWindow):
         try:
             m = config.build_machine(self._collect())
         except (OSError, ValueError, NotImplementedError) as e:
-            return QMessageBox.warning(self, "Morosa Settings", str(e))
+            return QMessageBox.warning(self, "Morosa Emulation", str(e))
         w = MachineScreen(m, self.audio.isChecked(), self.status.isChecked(), self._collect()["joykeys"], self.trim.isChecked(), self._collect()["snd_out"],
                           {"vkeyboard": self.vkbd.isChecked(), "pause_unfocus": self.pause_unfocus.isChecked(), "rctrl": self.rctrl.isChecked(), "line": self.disp_line.currentIndex(), "filter": self.disp_filter.currentIndex(), "aspect": self.disp_aspect.currentIndex(), "scale": (0, 2, 3, 4)[self.disp_scale.currentIndex()]})
         w.settings = self
