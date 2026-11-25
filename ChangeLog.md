@@ -170,3 +170,4 @@
 - Nov 25 2026 - Host folder volume: free space correct on drives over 1 TB (block size scales; counts no longer capped).
 - Nov 25 2026 - Title bar: app icon left of Menu; title shows build number from build.txt.
 - Nov 25 2026 - Settings: size limit per host folder drive (GB); writes past it fail with disk full, Workbench shows limit as volume size.
+- Nov 25 2026 - F10 dump also saves dumpNN_chip.png decoded from chip RAM; shows if glitches are in memory or display.

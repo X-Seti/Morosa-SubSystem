@@ -1,4 +1,4 @@
-#this belongs in apps/gui/screen.py - Version: 17
+#this belongs in apps/gui/screen.py - Version: 18
 # X-Seti - November 17 2026 - Morosa - Morosa Machine Screen.
 
 """
@@ -253,14 +253,17 @@ class MachineScreen(QWidget):
         (d / f"prof{n:02d}.txt").write_text(out.getvalue(), encoding="utf-8")
         self.note, self.note_until = f"Saved prof{n:02d}", time.monotonic() + 2.0
 
-    def state_dump(self) -> None:  #vers 1
-        """Save the picture and display state as dumps/dumpNN.png and .txt."""
+    def state_dump(self) -> None:  #vers 2
+        """Save picture, chip RAM picture and display state as dumps/dumpNN."""
         from apps.methods import debugdump
         d = config.ROOT / "dumps"
         stem = debugdump.next_name(d)
         if self.img is not None:
             self.img.save(str(d / f"{stem}.png"))
         (d / f"{stem}.txt").write_text(debugdump.dump_text(self.m), encoding="utf-8")
+        pic = debugdump.chip_picture(self.m)
+        if pic:
+            QImage(pic[2], pic[0], pic[1], pic[0] * 4, QImage.Format.Format_RGB32).save(str(d / f"{stem}_chip.png"))
         self.note, self.note_until = f"Saved {stem}", time.monotonic() + 2.0
         self.update()
 

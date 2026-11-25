@@ -1,4 +1,4 @@
-#this belongs in apps/hardware/agnus.py - Version: 14
+#this belongs in apps/hardware/agnus.py - Version: 15
 # X-Seti - November 17 2026 - Morosa - Morosa Agnus.
 
 """
@@ -48,6 +48,7 @@ class Agnus:
         self.diwstrt, self.diwstop = 0x2C81, 0x2CC1
         self.diwhigh = None
         self.skip = False
+        self.nfetch = self.fetch_n = 0
         self.ddfstrt, self.ddfstop = 0x38, 0xD0
         self.sprpt = [0] * 8
         self.sprstate = [dict(vstart=0, vstop=0, active=False, ended=False) for _ in range(8)]
@@ -146,7 +147,7 @@ class Agnus:
             pass
 
     # ---- frame ----
-    def _fetch_planes(self):  #vers 5
+    def _fetch_planes(self):  #vers 6
         bpu = self.denise.nplanes()
         mult = self.denise.fetch_mult()
         hires = bool(self.denise.bplcon0 & 0x8040)
@@ -156,6 +157,7 @@ class Agnus:
         if self.denise.bplcon0 & 0x40:
             n = ((self.ddfstop - self.ddfstrt) // (2 * mult) + (4 if mult == 1 else 1)) * mult
         size, chip, mask = 2 * n, self.chip, self.mask
+        self.fetch_n, self.nfetch = n, self.nfetch + 1
         offs, rows = [], []
         for i in range(bpu):
             ptr = self.bplpt[i]
@@ -287,8 +289,9 @@ class Agnus:
             self.lines = 312 if self.beamcon & 0x20 else 262
             self.ccl = CCLOCKS
 
-    def run_frame(self, cpu_run=None) -> None:  #vers 3
+    def run_frame(self, cpu_run=None) -> None:  #vers 4
         self.vpos = 0
+        self.nfetch = 0
         for _ in range(self.lines + (1 if self.lof and not self.beamcon & 0x80 else 0)):
             self.line(cpu_run)
         self.frames += 1

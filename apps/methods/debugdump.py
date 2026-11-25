@@ -1,4 +1,4 @@
-#this belongs in apps/methods/debugdump.py - Version: 2
+#this belongs in apps/methods/debugdump.py - Version: 3
 # X-Seti - November 23 2026 - Morosa - Display State Dump.
 
 """
@@ -8,6 +8,7 @@ Morosa Debugdump - writes cpu registers, display registers, sprite state and the
 ##Methods list -
 # _scalars
 # _copper_list
+# chip_picture
 # dump_text
 # next_name
 
@@ -52,6 +53,28 @@ def _copper_list(agnus, start: int, limit: int = 600) -> list:  #vers 1
             break
         a += 4
     return out
+
+
+def chip_picture(m):  #vers 1
+    """Bitplanes decoded straight from chip RAM: (width, height, BGRA bytes) or None."""
+    import numpy as np
+    a, d = m.agnus, m.agnus.denise
+    bpu, rows, n = d.nplanes(), a.nfetch, a.fetch_n
+    if not (bpu and rows and n):
+        return None
+    size, buf = 2 * n, np.frombuffer(a.chip, dtype=np.uint8)
+    idx = np.zeros((rows, 16 * n), dtype=np.uint8)
+    for i in range(bpu):
+        step = size + (a.bpl1mod if i % 2 == 0 else a.bpl2mod)
+        start = (a.bplpt[i] & a.mask & ~1) - rows * step
+        for r in range(rows):
+            o = start + r * step
+            if 0 <= o and o + size <= len(buf):
+                idx[r] |= np.unpackbits(buf[o:o + size]) << i
+    table = np.zeros((256, 4), dtype=np.uint8)
+    for k, c in enumerate(d.color):
+        table[k] = tuple(d.rgb(c))
+    return 16 * n, rows, table[idx].tobytes()
 
 
 def dump_text(m) -> str:  #vers 5
