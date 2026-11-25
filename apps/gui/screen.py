@@ -1,4 +1,4 @@
-#this belongs in apps/gui/screen.py - Version: 16
+#this belongs in apps/gui/screen.py - Version: 17
 # X-Seti - November 17 2026 - Morosa - Morosa Machine Screen.
 
 """
@@ -201,16 +201,30 @@ class MachineScreen(QWidget):
         self.note, self.note_until = (f"Saved {name}" if ok else "Snapshot failed"), time.monotonic() + 2.0
         self.update()
 
-    def profile_start(self) -> None:  #vers 1
-        """Shift+F10: profile 100 ticks, then save dumps/profNN.txt."""
+    def profile_start(self) -> None:  #vers 2
+        """Shift+F10: profile 100 ticks, sampling guest PC; save dumps/profNN.txt."""
         import cProfile
         if getattr(self, "_prof", None) is not None:
             return
+        m = self.m
+        self._pcs, self._pstop, self._pirq, self._pn_s = {}, 0, 0, 0
+        self._pact = (m.act_hd, m.act_hfs, m.act_ram + m.cpu.touches)
+        orig = m._run_cpu
+
+        def sample(cycles):
+            r = orig(cycles)
+            pc = m.cpu.pc
+            self._pn_s += 1
+            self._pcs[pc & ~0xFF] = self._pcs.get(pc & ~0xFF, 0) + 1
+            self._pstop += m.cpu.stopped
+            self._pirq += m.paula.level != 0
+            return r
+        m._run_cpu = sample
         self._prof, self._pn, self._pt, self._pf = cProfile.Profile(), 0, time.monotonic(), self.fcount
         self._prof.enable()
         self.note, self.note_until = "Profiling 100 ticks", time.monotonic() + 2.0
 
-    def _profile_end(self) -> None:  #vers 2
+    def _profile_end(self) -> None:  #vers 3
         """Stop the profile and write the busiest functions."""
         import io
         import pstats
@@ -219,6 +233,14 @@ class MachineScreen(QWidget):
         out = io.StringIO()
         secs, frames = time.monotonic() - self._pt, self.fcount - self._pf
         out.write(f"ticks {self._pn} frames {frames} seconds {secs:.2f} fps {frames / secs:.1f}\n")
+        m = self.m
+        del m._run_cpu
+        n = max(1, self._pn_s)
+        out.write(f"guest samples {n} stopped {100 * self._pstop / n:.0f}% irq pending {100 * self._pirq / n:.0f}% model {m.cpu.model} ratio {m.ratio}\n")
+        out.write(f"hd {m.act_hd - self._pact[0]} hostfs {m.act_hfs - self._pact[1]} ram {m.act_ram + m.cpu.touches - self._pact[2]}\n")
+        out.write("guest pc 256-byte blocks:\n")
+        for pc, c in sorted(self._pcs.items(), key=lambda t: -t[1])[:20]:
+            out.write(f"  {pc:08X} {100 * c / n:5.1f}%\n")
         for key in ("tottime", "cumulative"):
             out.write(f"\nsorted by {key}\n")
             pstats.Stats(prof, stream=out).sort_stats(key).print_stats(28)

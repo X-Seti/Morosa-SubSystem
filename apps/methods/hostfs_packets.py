@@ -1,4 +1,4 @@
-#this belongs in apps/methods/hostfs_packets.py - Version: 2
+#this belongs in apps/methods/hostfs_packets.py - Version: 4
 # X-Seti - November 23 2026 - Morosa - Host Folder DOS Packets.
 
 """
@@ -29,6 +29,7 @@ Host Packets - turns AmigaDOS packets for a mounted host folder into file operat
 # _seek
 # _set_size
 # _stamp
+# _used_bytes
 # _write
 # _from_stamp
 
@@ -56,7 +57,7 @@ NAMES = {0: "STARTUP", 7: "CURRENT_VOLUME", 8: "LOCATE_OBJECT", 15: "FREE_LOCK",
 class Volume:
     """State of one mounted folder: lock pool, open files, examine listings, metadata database."""
 
-    def __init__(self, folder: str, mem, label: str, log=None, writable: bool = False, startup: str = ""):  #vers 3
+    def __init__(self, folder: str, mem, label: str, log=None, writable: bool = False, startup: str = "", limit: int = 0):  #vers 4
         self.folder = os.path.abspath(folder)
         self.mem, self.label, self.log, self.writable = mem, label, log, writable
         self.startup = os.path.join(self.folder, startup) if startup else ""
@@ -69,6 +70,13 @@ class Volume:
         self.port = 0
         self.vn = 0
         self.db = None
+        self.limit, self.used = limit, None
+
+    def _used_bytes(self) -> int:  #vers 1
+        """Folder bytes; counted once, then tracked."""
+        if self.used is None:
+            self.used = sum(os.lstat(os.path.join(d, n)).st_size for d, _, ns in os.walk(self.folder) for n in ns)
+        return self.used
 
     def setup(self, area: int, pool: int, size: int) -> None:  #vers 2
         """Lock pool: 32-byte FileLock structures carved from the area."""
@@ -233,7 +241,7 @@ class Volume:
             return 0, 0
         return self._make_lock(os.path.dirname(host), rel[:-1], 0xFFFFFFFE)
 
-    def _open(self, typ: int, fh: int, lock: int, name: str):  #vers 1
+    def _open(self, typ: int, fh: int, lock: int, name: str):  #vers 2
         err, host, rel, leaf = self._resolve(lock, name, leaf_may_miss=typ != 1005)
         if err:
             return err
@@ -251,13 +259,17 @@ class Volume:
                 return ERR_WRONG_TYPE
             else:
                 mode = "w+b" if typ == 1006 else "r+b"
+        if self.limit:
+            self._used_bytes()
+            if mode == "w+b" and os.path.isfile(host):
+                self.used -= os.path.getsize(host)
         try:
             f = open(host, mode)
         except OSError:
             return ERR_NOT_FOUND
         fid = self.next_file
         self.next_file += 1
-        self.files[fid] = {"f": f, "host": host, "rel": rel}
+        self.files[fid] = {"f": f, "host": host, "rel": rel, "size": os.path.getsize(host)}
         self.mem.w32((fh << 2) + 36, fid)
         self.mem.w32((fh << 2) + 8, self.port)
         return 0
@@ -270,16 +282,22 @@ class Volume:
         self.mem.wr(addr, data)
         return len(data), 0
 
-    def _write(self, fid: int, addr: int, n: int):  #vers 1
+    def _write(self, fid: int, addr: int, n: int):  #vers 2
         f = self.files.get(fid)
         if not f:
             return DOSTRUE, ERR_INVALID_LOCK
         if not self.writable:
             return DOSTRUE, ERR_WRITE_PROT
+        grow = max(0, f["f"].tell() + n - f["size"])
+        if self.limit and self._used_bytes() + grow > self.limit:
+            return DOSTRUE, ERR_DISK_FULL
         try:
             f["f"].write(self.mem.rd(addr, n))
         except OSError:
             return DOSTRUE, ERR_DISK_FULL
+        f["size"] += grow
+        if self.limit:
+            self.used += grow
         return n, 0
 
     def _seek(self, fid: int, pos: int, mode: int):  #vers 1
@@ -299,7 +317,7 @@ class Volume:
         fh.seek(new)
         return old, 0
 
-    def _set_size(self, fid: int, pos: int, mode: int):  #vers 1
+    def _set_size(self, fid: int, pos: int, mode: int):  #vers 2
         f = self.files.get(fid)
         if not f or not self.writable:
             return DOSTRUE, ERR_WRITE_PROT if f else ERR_INVALID_LOCK
@@ -310,6 +328,9 @@ class Volume:
         fh.seek(0, 2)
         end = fh.tell()
         new = max(0, pos if mode == -1 else cur + pos if mode == 0 else end + pos)
+        if self.limit:
+            self.used = self._used_bytes() + new - f["size"]
+        f["size"] = new
         fh.truncate(new)
         fh.seek(min(cur, new))
         return new, 0
@@ -329,7 +350,7 @@ class Volume:
             return 0, ERR_DISK_FULL
         return self._make_lock(p, rel + (leaf,), 0xFFFFFFFF)
 
-    def _delete(self, lock: int, name: str) -> int:  #vers 1
+    def _delete(self, lock: int, name: str) -> int:  #vers 2
         if not self.writable:
             return ERR_WRITE_PROT
         err, host, rel, leaf = self._resolve(lock, name)
@@ -339,6 +360,9 @@ class Volume:
             return ERR_DELETE_PROT
         if any(f["host"] == host for f in self.files.values()):
             return ERR_IN_USE
+        size = os.path.getsize(host) if self.limit and os.path.isfile(host) else 0
+        if self.limit:
+            self._used_bytes()
         try:
             if os.path.isdir(host):
                 os.rmdir(host)
@@ -346,6 +370,7 @@ class Volume:
                 os.remove(host)
         except OSError:
             return ERR_NOT_EMPTY if os.path.isdir(host) else ERR_DELETE_PROT
+        self.used = self.used - size if self.limit else self.used
         self.db.delete(rel)
         return 0
 
@@ -368,14 +393,20 @@ class Volume:
         self.db.rename(rel, drel + (leaf,))
         return 0
 
-    def _disk_info(self, addr: int) -> None:  #vers 1
+    def _disk_info(self, addr: int) -> None:  #vers 2
+        """Fill InfoData; block size grows so counts fit 31 bits."""
         try:
             u = shutil.disk_usage(self.folder)
-            total, used = u.total // 512, u.used // 512
+            total, used = u.total, u.used
         except OSError:
             total = used = 0
+        if self.limit:
+            total, used = self.limit, min(self._used_bytes(), self.limit)
+        bs = 512
+        while total // bs > 0x7FFFFFFF:
+            bs *= 2
         state = 82 if self.writable else 80
-        self.mem.wr(addr, struct.pack(">IIIIIIIII", 0, 0, state, min(total, 0x7FFFFFFF), min(used, 0x7FFFFFFF), 512, 0x444F5301, self.vn >> 2, 0))
+        self.mem.wr(addr, struct.pack(">IIIIIIIII", 0, 0, state, total // bs, used // bs, bs, 0x444F5301, self.vn >> 2, 0))
 
     def packet(self, pkt: int, port: int, dn: int, vn: int):  #vers 3
         """Run one packet and write dp_Res1/dp_Res2; returns "start" for the startup packet."""

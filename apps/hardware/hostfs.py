@@ -1,4 +1,4 @@
-#this belongs in apps/hardware/hostfs.py - Version: 3
+#this belongs in apps/hardware/hostfs.py - Version: 4
 # X-Seti - November 23 2026 - Morosa - Host Folder Filesystem Board.
 
 """
@@ -90,7 +90,7 @@ class HostFS:
 
     zorro, kb = 2, 64
 
-    def __init__(self, folder: str, unit: int = 0, boot_pri: int = 0, label: str = "", log=None, writable: bool = False, startup: str = ""):  #vers 3
+    def __init__(self, folder: str, unit: int = 0, boot_pri: int = 0, label: str = "", log=None, writable: bool = False, startup: str = "", limit: int = 0):  #vers 4
         self.folder, self.unit, self.boot_pri, self.startup = folder, unit, boot_pri, startup
         self.label = label or os.path.basename(os.path.abspath(folder)) or "Morosa"
         self.mfr, self.product, self.serial = MFR, PRODUCT, unit + 1
@@ -99,16 +99,17 @@ class HostFS:
         self.owner = None
         self.log = log
         self.writable = writable
+        self.limit = limit
         self.area = 0
         self.port = 0
         self.add_vol = 0
         self.rom = bytearray(REGS)
         self.vol = None
 
-    def attach(self, mem) -> None:  #vers 1
+    def attach(self, mem) -> None:  #vers 2
         self.mem = mem
         from apps.methods.hostfs_packets import Volume
-        self.vol = Volume(self.folder, mem, self.label, self.log, self.writable, self.startup)
+        self.vol = Volume(self.folder, mem, self.label, self.log, self.writable, self.startup, self.limit)
 
     def config_rom(self) -> bytes:  #vers 2
         """Zorro II, 64K, diag valid; the DiagArea sits at DIAG inside the board."""

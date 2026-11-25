@@ -1,4 +1,4 @@
-#this belongs in apps/methods/config.py - Version: 28
+#this belongs in apps/methods/config.py - Version: 29
 # X-Seti - November 17 2026 - Morosa - Morosa Subsystem.
 
 """
@@ -96,7 +96,7 @@ def is_exe(path: str) -> bool: #vers 1
 # ---- machine profiles ----
 HD_SLOTS = 12
 PROFILE_DEFAULT = {"preset": "A500", "cpu": 0, "cpu_name": "", "fast_mb": 0, "pal": True, "rom": "", "ext_rom": "", "xfer": "", "cart": "None", "rtc": False, "bootstrap": "", "df": ["", "", "", ""],
-                   "hd": [""] * HD_SLOTS, "hd_pri": [-i for i in range(HD_SLOTS)], "hd_ss": [""] * HD_SLOTS, "hdf_write": False, "addr24": False, "fpu": 3, "clx": 3, "rtg": False, "rtg_mb": 4, "rctrl": False, "blit": 0, "snd_filter": 0, "snd_sep": 100, "mhz": 0, "chipset": "", "c2p": True, "chip_kb": 0, "snd_ch": 4, "snd_bits": 8, "snd_rate": 44100, "snd_out": "qt", "slow_kb": 0, "pause_unfocus": False, "df_write": [False] * 4, "vkeyboard": False, "z2_kb": 0, "z3_kb": 0, "proc_kb": 0, "port0": "mouse", "port1": "joy", "disp_line": 0, "disp_filter": 0, "disp_aspect": 0, "disp_scale": 0, "swapper": [], "hf_heads": 16, "hf_spt": 63, "boards_kb": [], "audio": True, "status": True, "trim": False,
+                   "hd": [""] * HD_SLOTS, "hd_pri": [-i for i in range(HD_SLOTS)], "hd_ss": [""] * HD_SLOTS, "hd_limit": [0] * HD_SLOTS, "hdf_write": False, "addr24": False, "fpu": 3, "clx": 3, "rtg": False, "rtg_mb": 4, "rctrl": False, "blit": 0, "snd_filter": 0, "snd_sep": 100, "mhz": 0, "chipset": "", "c2p": True, "chip_kb": 0, "snd_ch": 4, "snd_bits": 8, "snd_rate": 44100, "snd_out": "qt", "slow_kb": 0, "pause_unfocus": False, "df_write": [False] * 4, "vkeyboard": False, "z2_kb": 0, "z3_kb": 0, "proc_kb": 0, "port0": "mouse", "port1": "joy", "disp_line": 0, "disp_filter": 0, "disp_aspect": 0, "disp_scale": 0, "swapper": [], "hf_heads": 16, "hf_spt": 63, "boards_kb": [], "audio": True, "status": True, "trim": False,
                    "joykeys": {"up": 16777235, "down": 16777237, "left": 16777234, "right": 16777236, "fire": 16777249, "fire2": 16777251}}
 
 
@@ -157,6 +157,7 @@ def profiles() -> dict:  #vers 3
             p["hd_pri"] = [0 if old[i] else -i for i in range(HD_SLOTS)]
         p["hd_pri"] = ([int(x) for x in p["hd_pri"]] + [-i for i in range(HD_SLOTS)])[:HD_SLOTS]
         p["hd_ss"] = (list(p.get("hd_ss", [])) + [""] * HD_SLOTS)[:HD_SLOTS]
+        p["hd_limit"] = ([int(x) for x in p["hd_limit"]] + [0] * HD_SLOTS)[:HD_SLOTS]
         p.pop("hd_boot", None)
         p.pop("hdf", None)
         out[k] = p
@@ -245,7 +246,7 @@ def build_machine(profile: dict):  #vers 24
         if os.path.isdir(path):
             from apps.hardware.hostfs import HostFS
             pri = p["hd_pri"][unit]
-            m.add_board(HostFS(path, unit, pri if pri >= 0 else -128, "", None, bool(p["hdf_write"]), p["hd_ss"][unit]))
+            m.add_board(HostFS(path, unit, pri if pri >= 0 else -128, "", None, bool(p["hdf_write"]), p["hd_ss"][unit], int(p["hd_limit"][unit]) << 30))
             continue
         if m.akiko is not None or m.dmac is not None:
             from apps.hardware import cdimage

@@ -166,3 +166,7 @@
 - Nov 24 2026 - Blitter ignores modulo bit 0; fixes Turrican II logo rows.
 - Nov 24 2026 - Long frame adds a line; AGA Turrican II boots (PAL check waited for line 312).
 - Nov 24 2026 - CDTV DMAC board mapping no longer crashes (board has no RAM).
+- Nov 25 2026 - Shift+F10 profile samples guest PC: top 256-byte blocks, stopped and irq share, hd/hostfs counts. Fixed profile error loop.
+- Nov 25 2026 - Host folder volume: free space correct on drives over 1 TB (block size scales; counts no longer capped).
+- Nov 25 2026 - Title bar: app icon left of Menu; title shows build number from build.txt.
+- Nov 25 2026 - Settings: size limit per host folder drive (GB); writes past it fail with disk full, Workbench shows limit as volume size.

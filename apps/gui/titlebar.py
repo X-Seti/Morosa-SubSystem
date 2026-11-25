@@ -1,4 +1,4 @@
-#this belongs in apps/gui/titlebar.py - Version: 5
+#this belongs in apps/gui/titlebar.py - Version: 6
 # X-Seti - November 22 2026 - Morosa - Custom Title Bar.
 
 """
@@ -25,6 +25,7 @@ from PyQt6.QtSvg import QSvgRenderer
 from PyQt6.QtWidgets import QFrame, QHBoxLayout, QLabel, QMenu, QPushButton, QToolButton
 
 APP_ICON = Path(__file__).resolve().parents[2] / "App_icon.webp"
+BUILD = (Path(__file__).resolve().parents[2] / "build.txt").read_text().strip()
 S = 'fill="none" stroke="{c}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"'
 SVG = {"menu": f'<path d="M4 6h16M4 12h16M4 18h16" {S}/>',
        "settings": f'<path d="M4 7h10M18 7h2M4 17h2M10 17h10" {S}/><circle cx="16" cy="7" r="2" {S}/><circle cx="8" cy="17" r="2" {S}/>',
@@ -39,7 +40,7 @@ SVG = {"menu": f'<path d="M4 6h16M4 12h16M4 18h16" {S}/>',
 class TitleBar(QFrame):
     """Left: Menu, Settings. Centre: title. Right: cog, minimize, maximize, close."""
 
-    def __init__(self, win, menu_fn, settings_fn, amisys_fn, cog_fn, play_fn, pause_fn, stop_fn, save_fn):  #vers 5
+    def __init__(self, win, menu_fn, settings_fn, amisys_fn, cog_fn, play_fn, pause_fn, stop_fn, save_fn):  #vers 6
         super().__init__(win)
         self.win = win
         self.setObjectName("titlebar")
@@ -47,6 +48,11 @@ class TitleBar(QFrame):
         lo = QHBoxLayout(self)
         lo.setContentsMargins(6, 3, 6, 3)
         lo.setSpacing(4)
+        self.logo = QLabel()
+        logo = QPixmap(str(APP_ICON))
+        self.logo.setPixmap(logo.scaled(24, 24, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+        win.setWindowIcon(QIcon(logo))
+        lo.addWidget(self.logo)
         self.menu_btn = QToolButton()
         self.menu_btn.setText("Menu")
         self.menu_btn.setIcon(self._icon("menu"))
@@ -62,12 +68,7 @@ class TitleBar(QFrame):
         sb.clicked.connect(lambda _=False: settings_fn())
         lo.addWidget(sb)
         lo.addStretch(1)
-        self.logo = QLabel()
-        logo = QPixmap(str(APP_ICON))
-        self.logo.setPixmap(logo.scaled(24, 24, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
-        win.setWindowIcon(QIcon(logo))
-        lo.addWidget(self.logo)
-        self.label = QLabel("Morosa Emulator")
+        self.label = QLabel(f"Morosa Emulator Build {BUILD}")
         self.label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         f = self.label.font()
         f.setBold(True)

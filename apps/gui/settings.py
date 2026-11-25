@@ -1,4 +1,4 @@
-#this belongs in apps/gui/settings.py - Version: 39
+#this belongs in apps/gui/settings.py - Version: 40
 # X-Seti - November 17 2026 - Morosa - Settings Editor.
 
 """
@@ -293,6 +293,13 @@ class SettingsWindow(QMainWindow):
         self.hd = [QLineEdit() for _ in range(config.HD_SLOTS)]
         self.hd_ss = [QLineEdit() for _ in range(config.HD_SLOTS)]
         self.hd_pri = [QSpinBox() for _ in range(config.HD_SLOTS)]
+        self.hd_limit = [QSpinBox() for _ in range(config.HD_SLOTS)]
+        for sp in self.hd_limit:
+            sp.setRange(0, 4096)
+            sp.setSpecialValueText("No limit")
+            sp.setSuffix(" GB")
+            sp.setButtonSymbols(QSpinBox.ButtonSymbols.NoButtons)
+            sp.setFixedWidth(80)
         for sp in self.hd_pri:
             sp.setRange(-128, 127)
             sp.setPrefix("Boot Pri ")
@@ -887,12 +894,12 @@ class SettingsWindow(QMainWindow):
         form.addRow("", QLabel("Keys also reach the Amiga keyboard. Escape clears a key."))
         return w
 
-    def _tab_drives(self) -> QWidget:  #vers 3
+    def _tab_drives(self) -> QWidget:  #vers 4
         w = QWidget()
         lo = QVBoxLayout(w)
         grid = QGridLayout()
         grid.setVerticalSpacing(2)
-        for c, t in ((0, "Slot"), (1, "Path"), (2, "Boot Pri"), (4, "Startup-Sequence (folders)")):
+        for c, t in ((0, "Slot"), (1, "Path"), (2, "Boot Pri"), (4, "Startup-Sequence (folders)"), (5, "Size limit")):
             grid.addWidget(QLabel(t), 0, c)
         self.hd_rows = []
         for i, e in enumerate(self.hd):
@@ -909,10 +916,12 @@ class SettingsWindow(QMainWindow):
             self.hd_ss[i].setToolTip("Script shown to the Amiga as S:Startup-Sequence; the folder is not changed. Full path, or relative to the folder.")
             ss = self._pick(self.hd_ss[i], "All files (*)", False, None, False)
             grid.addWidget(ss, i + 1, 4)
+            self.hd_limit[i].setToolTip("Folder drives: files stay within this size, writes past it fail with disk full.")
+            grid.addWidget(self.hd_limit[i], i + 1, 5)
             ic = QLabel()
             ic.setFixedSize(24, 24)
             grid.addWidget(ic, i + 1, 3)
-            self.hd_rows.append((name, pick, self.hd_pri[i], ic, ss))
+            self.hd_rows.append((name, pick, self.hd_pri[i], ic, ss, self.hd_limit[i]))
             self.hd_pri[i].valueChanged.connect(lambda v, l=ic: self._boot_icon(l, v))
             self._boot_icon(ic, self.hd_pri[i].value())
         grid.setColumnStretch(1, 1)
@@ -1055,7 +1064,7 @@ class SettingsWindow(QMainWindow):
             self.list.setCurrentRow(names.index(select) if select in names else 0)
             self._fill(self.list.currentItem().text())
 
-    def _fill(self, name: str) -> None:  #vers 19
+    def _fill(self, name: str) -> None:  #vers 20
         p = self.profiles.get(name)
         if not p:
             return
@@ -1119,8 +1128,10 @@ class SettingsWindow(QMainWindow):
             c.setValue(int(v))
         for e, v in zip(self.hd_ss, p["hd_ss"]):
             e.setText(v)
+        for c, v in zip(self.hd_limit, p["hd_limit"]):
+            c.setValue(int(v))
 
-    def _collect(self) -> dict:  #vers 18
+    def _collect(self) -> dict:  #vers 19
         try:
             boards = [int(x) for x in self.boards.text().replace(" ", "").split(",") if x]
         except ValueError:
@@ -1130,7 +1141,7 @@ class SettingsWindow(QMainWindow):
                 "proc_kb": (0, 4096, 8192, 16384, 32768, 65536, 131072, 262144)[self.proc.currentIndex()], "df_write": [not c.isChecked() for c in self.dfwp], "vkeyboard": self.vkbd.isChecked(), "pause_unfocus": self.pause_unfocus.isChecked(), "rctrl": self.rctrl.isChecked(), "rtg": self.rtg.isChecked(), "blit": int(self.blit[0].isChecked()), "snd_filter": self.snd_filter.currentIndex(), "snd_sep": self.snd_sep.value(), "port0": ("mouse", "joy", "none")[self.port0.currentIndex()], "port1": ("mouse", "joy", "none")[self.port1.currentIndex()], "slow_kb": (0, 512, 1024, 1792)[self.slow.currentIndex()], "disp_line": self.disp_line.currentIndex(), "disp_filter": self.disp_filter.currentIndex(), "disp_aspect": self.disp_aspect.currentIndex(), "disp_scale": self.disp_scale.currentIndex(),
                 "snd_out": ("qt", "pipewire")[self.snd_out.currentIndex()], "snd_rate": int(self.snd_rate.currentText()),
                 "snd_bits": (8, 16, 24, 32)[self.snd_bits.currentIndex()], "snd_ch": int(self.snd_ch.currentText()), "swapper": [self.swap.item(i).text() for i in range(self.swap.count())], "chip_kb": (0, 256, 512, 1024, 2048)[self.chip.currentIndex()], "mhz": self.SPEEDS[self.speed.currentIndex()], "pal": self.pal.currentIndex() == 0, "rom": self.rom.text(), "ext_rom": self.ext_rom.text(), "xfer": self.xfer.text(), "cart": self.cart.currentText(), "rtc": self.rtc.isChecked(), "bootstrap": self.bootstrap.text(),
-                "df": [e.text() for e in self.df], "hd": [e.text() for e in self.hd], "hd_pri": [c.value() for c in self.hd_pri], "hd_ss": [e.text() for e in self.hd_ss], "hdf_write": self.hdf_write.isChecked(), "hf_heads": self.hf_heads.value(), "hf_spt": self.hf_spt.value(),
+                "df": [e.text() for e in self.df], "hd": [e.text() for e in self.hd], "hd_pri": [c.value() for c in self.hd_pri], "hd_ss": [e.text() for e in self.hd_ss], "hd_limit": [c.value() for c in self.hd_limit], "hdf_write": self.hdf_write.isChecked(), "hf_heads": self.hf_heads.value(), "hf_spt": self.hf_spt.value(),
                 "boards_kb": boards, "audio": self.audio.isChecked(), "status": self.status.isChecked(), "trim": self.trim.isChecked(),
                 "joykeys": {a: b.key for a, b in self.joykeys.items() if b.key}}
 
